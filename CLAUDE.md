@@ -61,7 +61,14 @@ Codex CLI（OpenAI）をセカンドオピニオンやタスク委譲に活用�
 | スキル | 用途 | コマンド例 |
 |--------|------|-----------|
 | `/docs-init` | 新プロジェクトに docs/ 標準構造を展開 | `/docs-init` |
+| `/docs-visualize` | C4 + 状態機械 + シーケンスで可視化 | `/docs-visualize`, `/docs-visualize --scope auth` |
 | `/adr-new` | 通し番号自動採番で ADR を作成 | `/adr-new プラットフォーム選定` |
+
+### 関連プロンプト
+
+人間が手元でコピペするためのプロンプト雛形は `agent-rules/prompts/` に置く:
+
+- [`prompts/docs-visualize.md`](prompts/docs-visualize.md) — 新プロジェクトで可視化を依頼するときのコピペ用文面 (最短版・フル版・自然言語トリガー・トラブルシュート付き)
 
 ### ADR 運用ルール
 
