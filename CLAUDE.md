@@ -28,11 +28,14 @@ Codex CLI（OpenAI）をセカンドオピニオンやタスク委譲に活用�
 | `/worktree-list` | 全タスクの状況・衝突リスク確認 | `/worktree-list` |
 | `/worktree-finish` | マージ + worktree 削除 | `/worktree-finish feat-auth` |
 
-### 並列開発フロー
-1. メインセッションで `/worktree-start <タスク名> <説明>` を実行
-2. 案内されたパスで `cd <path> && claude` で新セッション起動
-3. 各セッションで独立して開発（`/worktree-list` で他タスクの状況を随時確認）
-4. タスク完了後 `/worktree-finish` でベースブランチにマージ
+### 並列開発フロー（デフォルト: 単一セッション）
+1. `/worktree-start <タスク名> <説明>` で worktree 作成
+2. 同一セッション内で `cd <worktree path>` して作業（メインワークツリーでは直接コード変更しない原則は維持）
+3. 作業完了後、メインワークツリーに戻って `/worktree-finish` でマージ
+
+### 並列セッションを使う場合（独立タスクを同時進行する時のみ）
+- 真に並列化したい時だけ別セッションを起動: `cd <worktree path> && claude`
+- 依存関係のあるタスクや逐次進めるタスクは単一セッションで切り替えながら進める
 
 ### タスクレジストリ
 - `<repo>/.git/parallel-tasks.json` に全タスク情報を記録
