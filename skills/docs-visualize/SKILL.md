@@ -40,19 +40,22 @@ allowed-tools: Bash(ls *) Bash(find *) Bash(cat *) Bash(grep *) Bash(rg *) Bash(
 - データストア (ファイル / DB / Keychain など)
 - 主要な内部モジュール
 
-### 3. C4 図の生成
+### 3. C4-like 図の生成
+
+**重要**: Mermaid の `C4Context` / `C4Container` / `C4Component` 構文は **使わない** (長ラベルでレイアウトが崩れる既知問題)。**`flowchart` + `subgraph` + `classDef`** で同等表現する。詳しい記法は `docs/architecture/cheatsheet.md` を参照。
+
+すべての Mermaid ブロックの冒頭に `%%{init: {'theme':'default'}}%%` を入れ、`classDef` で `fill / stroke / stroke-width / color:#000` を全指定 (ダーク/ライト両モード対応)。
 
 #### 3-1. `0-context.md` (L1 Context)
-- システム本体を `System(...)` で
-- 外部 API・OS frameworks を `System_Ext(...)` で
-- 主要なペルソナを `Person(...)` で
-- 関係を `Rel(...)` / `BiRel(...)` で記述
+- システム本体・外部 API・主要ペルソナを flowchart で配置
+- ペルソナは `(())` (rounded)、外部は `subgraph external` でくくる
 - 末尾に「ポイント」セクションで主要な前提を箇条書き
 
 #### 3-2. `1-containers.md` (L2 Container)
-- アプリ内の主要 container (主要モジュール群) を列挙
+- アプリ内の主要 container (主要モジュール群) を `subgraph app` 内に列挙
 - 外部要素との関係を維持しつつ、内部の結線を可視化
 - Container は実装ディレクトリ・ファイル名と対応させる
+- DB / ストアは `[(...)]` (round-edge) で示す
 
 #### 3-3. `2-components.md` (L3 Component)
 - 重要な container (例: 中心的な Coordinator / Service) の内部結線
@@ -96,6 +99,10 @@ allowed-tools: Bash(ls *) Bash(find *) Bash(cat *) Bash(grep *) Bash(rg *) Bash(
 - **過剰な詳細を入れない**: L3 をすべての container に展開すると情報過多。中心 component に絞る
 - **コードと一致させる**: モジュール名・ファイル名・関数名は実コードと正確に揃える (推測で名前を作らない)
 - **Mermaid 構文を確認**: 各図は GitHub プレビューでレンダリングできる前提で書く。閉じ括弧・改行・特殊文字に注意
+- **C4 plugin は使わない**: `C4Context` / `C4Container` / `C4Component` はレイアウトが崩れる。flowchart + subgraph で同等表現する
+- **テーマ明示**: 冒頭に `%%{init: {'theme':'default'}}%%` を必ず入れる
+- **色は両モード対応**: classDef で `color:#000` を含めて fill / stroke / stroke-width を全指定 (cheatsheet の色パレットを参照)
+- **状態機械のラベル**: `\n` は使わず 1 行の短い動詞で書く。詳細は本文の表に逃がす
 - **コード分析の限界を認める**: 動的な振る舞いや状態遷移はコードから完全には読めない。推測した箇所は ADR で確認するか、ユーザーに尋ねる
 
 ## 関連
