@@ -7,6 +7,7 @@
 | ファイル | 用途 |
 |---|---|
 | [docs-visualize.md](docs-visualize.md) | 新プロジェクトでアーキテクチャを可視化したいとき |
+| [mac-verification.md](mac-verification.md) | iOS プロジェクトを Mac で実機ビルド + 動作確認するとき |
 
 ## スキルとの違い
 
