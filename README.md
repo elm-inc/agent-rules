@@ -11,12 +11,21 @@
 
 新マシンでのセットアップ:
 
+**ghq を使う場合 (推奨):**
+
+```bash
+ghq get https://github.com/elm-inc/agent-rules
+"$(ghq root)/github.com/elm-inc/agent-rules/install.sh"
+```
+
+**ghq が無い場合:**
+
 ```bash
 git clone https://github.com/elm-inc/agent-rules ~/repos/github.com/elm-inc/agent-rules
 ~/repos/github.com/elm-inc/agent-rules/install.sh
 ```
 
-`install.sh` は idempotent。既存 symlink はスキップ、不足分のみ追加する。
+`install.sh` は idempotent。既存 symlink はスキップ、不足分のみ追加する。配置先は任意で、`install.sh` 自身からの相対で symlink を貼るのでパスに依存しない。
 
 ### 前提
 
@@ -30,10 +39,20 @@ git clone https://github.com/elm-inc/agent-rules ~/repos/github.com/elm-inc/agen
 
 ### 更新
 
+ghq を使った場合:
+
+```bash
+cd "$(ghq root)/github.com/elm-inc/agent-rules"
+git pull
+./install.sh   # 新しいスキルが追加されていれば symlink される
+```
+
+`git clone` した場合 (clone 先のパスに合わせて):
+
 ```bash
 cd ~/repos/github.com/elm-inc/agent-rules
 git pull
-./install.sh   # 新しいスキルが追加されていれば symlink される
+./install.sh
 ```
 
 symlink 経由なので、`git pull` した時点で `~/CLAUDE.md` 等の内容は自動的に最新になる。`install.sh` の再実行は **新しいスキルや新ファイルが追加されたとき** に必要。
