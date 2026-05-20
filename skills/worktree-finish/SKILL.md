@@ -3,7 +3,7 @@ name: worktree-finish
 description: 並列開発タスクを完了し worktree のブランチをベースブランチにマージする。タスクが完了した、worktree をマージしたいときに使用
 argument-hint: [タスク名]
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(jq *) Bash(cat *) Bash(python3 *) Read Write
+allowed-tools: Bash(git *) Bash(jq *) Bash(cat *) Bash(python3 *) mcp__linear__* Read Write
 ---
 
 # 並列開発: タスク完了とマージ
@@ -61,7 +61,13 @@ git branch -d <task_branch>
 ### 6. レジストリ更新
 タスクの status を `completed` に変更し、`finished_at` を記録。
 
-### 7. 結果表示
+### 7. Linear Issue 連携 (linear_issue_id がある場合のみ)
+レジストリに `linear_issue_id` が記録されていれば:
+- Linear MCP の `update_issue` 相当で state を `Done` (`Completed`) に遷移
+- Linear MCP が未認証なら警告のみ出して skip (マージ自体は完了済み)
+- 失敗してもマージ結果は変えない (Linear 同期はベストエフォート)
+
+### 8. 結果表示
 ```
 タスク「<タスク名>」を完了しました:
   マージ先: <base_branch>
@@ -69,6 +75,7 @@ git branch -d <task_branch>
   変更ファイル数: N
   worktree: 削除済み
   ブランチ: 削除済み
+  Linear:   <ELM-123 Done に遷移>  ← linear_issue_id 記録あり時のみ
 ```
 
 ## 注意事項

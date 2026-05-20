@@ -24,9 +24,9 @@ Codex CLI（OpenAI）をセカンドオピニオンやタスク委譲に活用�
 ### スキル一覧
 | スキル | 用途 | コマンド例 |
 |--------|------|-----------|
-| `/worktree-start` | worktree 作成 + タスク登録 | `/worktree-start feat-auth ユーザー認証の追加` |
+| `/worktree-start` | worktree 作成 + タスク登録 (`--linear <ID>` で Issue 連携) | `/worktree-start feat-auth ユーザー認証 --linear ELM-123` |
 | `/worktree-list` | 全タスクの状況・衝突リスク確認 | `/worktree-list` |
-| `/worktree-finish` | マージ + worktree 削除 | `/worktree-finish feat-auth` |
+| `/worktree-finish` | マージ + worktree 削除 (Linear 自動 Done) | `/worktree-finish feat-auth` |
 
 ### 並列開発フロー（デフォルト: 単一セッション）
 1. `/worktree-start <タスク名> <説明>` で worktree 作成
@@ -41,6 +41,69 @@ Codex CLI（OpenAI）をセカンドオピニオンやタスク委譲に活用�
 - `<repo>/.git/parallel-tasks.json` に全タスク情報を記録
 - 全 worktree から共有参照できるため、どのセッションからでも `/worktree-list` で全体を俯瞰可能
 - 変更ファイルの重複がある場合は衝突リスクとして警告される
+
+## Linear イシュー管理
+
+進捗・期日・ステークホルダー可視化は **Linear** に集約する。AI が読みやすい設計・決定ドキュメントは `docs/` に残し、コードレビューは GitHub PR を使う。各ツールの得意領域だけで運用し、重複を排除する。
+
+### 役割分担
+
+| 関心事 | 担当 |
+|---|---|
+| 期日・進捗・状態 (Todo/In Progress/Done, cycle) | **Linear** |
+| ステークホルダー可視化・優先度・ロードマップ | **Linear** |
+| Why (なぜそう決めたか) | `docs/adr/` |
+| How (動作・状態機械) | `docs/architecture/` |
+| What (詳細仕様・実装計画) | `docs/design/` |
+| コード・差分・レビュー | GitHub PR |
+| AI セッション文脈 | memory |
+| worktree のローカル状態 | `parallel-tasks.json` |
+
+**重複禁止**: Linear Issue description には「短い要約 + docs/design/foo.md へのリンク」だけ書く。本文は docs に。
+
+### Linear 内の構造
+
+- **Project** = 多段階タスク (Phase 1-N のリファクタなど)。期日と進捗率を持つ
+- **Issue** = 1 worktree = 1 PR の粒度
+- **サブ Issue** = Project 内の Phase。parent-child で表現
+
+### 相互リンク
+
+- Branch 名: `worktree/<linear-id-lowercase>-<task-name>` → Linear が PR を自動紐付け
+- Commit message: `feat: ... (ELM-123)`
+- docs/design/*.md 冒頭: `- Linear: ELM-123`
+- Linear Issue description: `docs/design/foo.md` への GitHub blob URL
+
+### スキル一覧
+
+| スキル | 用途 | コマンド例 |
+|--------|------|-----------|
+| `/linear-status` | Project / Issue / cycle の現状表示 | `/linear-status`, `/linear-status --mine` |
+| `/linear-issue` | Issue の作成・表示・状態変更 | `/linear-issue create "Phase 6 着手"`, `/linear-issue done ELM-106` |
+| `/linear-plan` | Project + サブ Issue を一括作成 (大規模計画用) | `/linear-plan "apps/batch test refactor" --design test-refactor-plan.md` |
+
+worktree との統合は `/worktree-start <name> --linear <ID>` で行う (Issue を In Progress に遷移、`/worktree-finish` で Done に遷移)。
+
+### 初回セットアップ
+
+各マシンで 1 回だけ実行:
+
+```bash
+claude mcp add --transport sse --scope user linear https://mcp.linear.app/sse
+# Claude Code セッション内で /mcp linear → OAuth 認証
+```
+
+### 運用フロー
+
+1. 新計画 → `docs/design/foo.md` を書く → `/linear-plan` で Project + サブ Issue 作成
+2. Phase 着手 → `/worktree-start <name> --linear <ID>` で worktree 作成 + Issue を In Progress
+3. 実装 → コミット message に Issue ID 埋め込み (`feat: ... (ELM-123)`)
+4. PR → branch 名から Linear が自動で PR を紐付け
+5. マージ → `/worktree-finish` が Issue を Done に遷移
+
+### Linear Docs は使わない
+
+ドキュメント本体は `docs/` (Markdown) に置く。Linear の **Docs/Wiki 機能** は AI 摩擦・vendor lock-in のため採用しない (Issue 管理のみ Linear を使う)。
 
 ## ドキュメント・図式
 
