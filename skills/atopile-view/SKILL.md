@@ -1,9 +1,9 @@
 ---
 name: atopile-view
 description: atopile プロジェクトの回路を確認する。BOM・接続済みピン・接続ツリーをサマリ表示し、KiCad pcbnew や PDF エクスポートなど次のアクションを案内する。実験フォルダで「回路を見たい」「pcbnew を開きたい」「BOM を確認したい」「接続を確認したい」ときに使用
-argument-hint: [<experiment-name|path>] [--target <build>] [--bom | --pinout | --tree | --kicad | --pdf [<file>] | --inspect <component>]
+argument-hint: [<experiment-name|path>] [--target <build>] [--bom | --pinout | --tree | --graph [--png|--svg] | --kicad | --pdf [<file>]]
 disable-model-invocation: false
-allowed-tools: Bash(ato *) Bash(pcbnew *) Bash(kicad-cli *) Bash(cat *) Bash(ls *) Bash(jq *) Bash(python3 *) Bash(awk *) Bash(find *) Bash(test *) Bash(which *) Bash(git *) Bash(uv *) Bash(column *) Bash(head *) Bash(pgrep *) Bash(xdg-open *) Read Write
+allowed-tools: Bash(ato *) Bash(pcbnew *) Bash(kicad-cli *) Bash(cat *) Bash(ls *) Bash(jq *) Bash(python3 *) Bash(awk *) Bash(find *) Bash(test *) Bash(which *) Bash(git *) Bash(uv *) Bash(column *) Bash(head *) Bash(pgrep *) Bash(xdg-open *) Bash(npx *) Read Write
 ---
 
 # atopile プロジェクト確認
@@ -64,9 +64,9 @@ awk パースが想定外の YAML 構文で動かないときは「`ato build` �
 2. **BOM サマリ**: 部品種別ごとの数 + 主要部品 (MCU / コネクタ / IC) のリスト (上位 10 行 + `(... N items)`)
 3. **接続済みピン サマリ**: 各 IC ピン JSON (`build/builds/<target>/pinout/*.json`) を読み、`isConnected: true` のピンを `{designator, lead, net}` 形式で 1 IC ずつまとめる
 4. **アクション提示**: 以下を 1 画面で案内
-   - `pcbnew layouts/<target>/<target>.kicad_pcb &` (KiCad PCB ビュー)
-   - `kicad-cli pcb export pdf -o board.pdf layouts/<target>/<target>.kicad_pcb` (PDF)
-   - `ato inspect <component>` (個別深掘り)
+   - `--graph` (`.ato` から Mermaid を生成、`--png`/`--svg` で実画像化)
+   - `--kicad` (pcbnew で PCB ビュー)
+   - `--pdf` (PCB を kicad-cli で PDF 出力)
 
 ### `--bom`
 
@@ -80,9 +80,36 @@ awk パースが想定外の YAML 構文で動かないときは「`ato build` �
 
 ### `--tree`
 
-`build/builds/<target>/<target>.data_interface_tree.ato.json` から **Mermaid graph** を生成して標準出力に書く。
+`build/builds/<target>/<target>.data_interface_tree.ato.json` から **interface ごとの Mermaid graph** を生成して標準出力に書く。
 - 各 interface (USB2_0, ElectricPower 等) を `subgraph` ブロック
 - ノードラベルに `groupLabel` (例: `Esp32Blink.mcu`) を使う
+- 空 (`nodes: []`) の interface は省く
+
+### `--graph` (atopile は回路図 `.kicad_sch` を生成しないため、コードに基づく見取り図を出す)
+
+`.ato` ソースを直接パースして **モジュール間の接続を表す Mermaid graph** を出力する。
+
+```bash
+# 標準出力に Markdown 用の fenced Mermaid を出す (人間の読み用)
+python3 ${SKILL_DIR}/scripts/ato_to_mermaid.py <name>.ato
+
+# mmdc に渡す生 Mermaid (fence なし) は --raw
+python3 ${SKILL_DIR}/scripts/ato_to_mermaid.py --raw <name>.ato > build/builds/<target>/<target>.mmd
+```
+
+- 各 `module` ブロック内の `name = new Type` を box、`~`/`~>` を辺として描画
+- 抽出は正規表現ベースのゆるいパースで、配線レベルの厳密さよりも「全体構造の把握」を優先する
+- 詳細な信号確認は `--kicad` (pcbnew) や `--pinout` を併用
+- **`--png` / `--svg` 付与時**:
+  ```bash
+  python3 ${SKILL_DIR}/scripts/ato_to_mermaid.py --raw <name>.ato > build/builds/<target>/<target>.mmd
+  npx --yes -p @mermaid-js/mermaid-cli mmdc \
+    -i build/builds/<target>/<target>.mmd \
+    -o build/builds/<target>/<target>.{png,svg} \
+    --puppeteerConfigFile <(echo '{"args":["--no-sandbox"]}')
+  ```
+  - mmdc は puppeteer 経由で chrome を起動するので `--no-sandbox` 必須
+  - 出力先を表示し、`xdg-open` の提案を添える
 
 ### `--kicad`
 
@@ -95,11 +122,6 @@ awk パースが想定外の YAML 構文で動かないときは「`ato build` �
 デフォルト出力先は `build/builds/<target>/<target>.pdf`。
 最後にファイルパスを表示し、`xdg-open <file>` の提案を添える。
 
-### `--inspect <component>`
-
-`ato inspect <component>` を実行してその結果を表示する。
-`<component>` は `.ato` ソースのアドレス (例: `Esp32Blink.mcu`)。
-
 ## 出力ガイドライン
 
 - 各セクション 10 行以内を目安に
@@ -109,6 +131,8 @@ awk パースが想定外の YAML 構文で動かないときは「`ato build` �
 ## 注意事項
 
 - `build/` / `parts/` / `.ato/` は atopile が自動再生成可能で、git 管理外を前提に動く
-- KiCad が無いホスト (CI / SSH リモート) では `--bom` / `--pinout` / `--tree` のみで完結する
+- KiCad が無いホスト (CI / SSH リモート) では `--bom` / `--pinout` / `--tree` / `--graph` (PNG/SVG 抜き) のみで完結する
 - 同名の experiments が複数階層に存在するケースでは曖昧さを警告しユーザに確認する
 - atopile 0.15.x は Python 3.14 を厳密に要求する。`uv tool install atopile` を `--python` なしで叩くと旧 0.2.x が入るので必ず `--python 3.14` を渡す (uv が事前ビルド済 Python 3.14 を自動取得するためホストに Python 3.14 が無くても OK)
+- atopile は伝統的な回路図 (`.kicad_sch`) を生成しない。`.ato` ソース自体が回路図の役割を担い、pcbnew は PCB レイアウト + ratsnest として動く。「コードに基づく見取り図」が欲しい場合は `--graph` を使う
+- `ato auth login` は不要。`ato install` / `ato build` などコア機能は未認証 (`Signed out`) で動作する
