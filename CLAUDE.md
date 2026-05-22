@@ -58,7 +58,18 @@
 
 ### セットアップ
 
-新規マシンでローカル LLM 系スキルを使う前に [`docs/setup/local-llm.md`](docs/setup/local-llm.md) の手順で vLLM サーバを起動する。クラウド系は `GEMINI_API_KEY` / `DEEPSEEK_API_KEY` を `~/.bashrc` に追加。
+新規マシンでローカル LLM 系スキルを使う前に [`docs/setup/local-llm.md`](docs/setup/local-llm.md) の手順で vLLM サーバを起動する。クラウド系の API キーは `scripts/env-snippet.sh` の方式 (`~/.*_token` ファイル → `~/.bashrc` から読込) を推奨。
+
+### トラブル対処の参照先
+
+詳細は各 docs/ または SKILL.md にあり、ここはインデックスのみ:
+
+- **vLLM Qwen が OOM** → [`docs/setup/notes/phase2-trial.md`](docs/setup/notes/phase2-trial.md) (pre-quantized FP8 + `--cpu-offload-gb 6` 必須)
+- **Gemini の応答が空** → [`skills/gemini-review/SKILL.md`](skills/gemini-review/SKILL.md) (thinking モードで枯渇、`maxOutputTokens ≥ 8192`)
+- **API キー管理** → [`scripts/env-snippet.sh`](scripts/env-snippet.sh) (`~/.*_token` ファイル方式)
+- **HF DL がストール** → [`docs/setup/notes/phase2-trial.md`](docs/setup/notes/phase2-trial.md) (`HF_TOKEN` + `HF_HUB_ENABLE_HF_TRANSFER=1`)
+- **設計判断の根拠** → [`docs/adr/0001-multi-llm-development-workflow.md`](docs/adr/0001-multi-llm-development-workflow.md)
+- **月次 ROI 更新** → [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) §8 + [`scripts/track-cost.sh`](scripts/track-cost.sh)
 
 ## 並列開発 (git worktree)
 タスクごとに git worktree を分離し、複数の Claude Code セッションで安全に並列開発する。
