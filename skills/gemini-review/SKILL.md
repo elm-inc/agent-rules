@@ -121,6 +121,10 @@ echo "## 関連コード (ADR で言及されているパス配下)"
 
 ### 4. Gemini API 呼び出し
 
+> **重要 (Phase 4 試運転で判明)**: Gemini 2.5 Pro は **thinking モードがデフォルト有効**で、簡単な質問でも 1500-4000 token を思考に消費する。`maxOutputTokens` が小さいと thinking で枯渇して **応答 0 token** になる。
+> - `maxOutputTokens: 8192` を下限とする (内訳: thinking ~4000, output ~4000)
+> - 必要に応じ `thinkingConfig.thinkingBudget: 0` で thinking を無効化 (簡潔な指摘で十分な場合)
+
 ```bash
 PAYLOAD=$(jq -n \
   --arg content "$PROMPT" \
@@ -132,9 +136,32 @@ PAYLOAD=$(jq -n \
     }
   }')
 
-curl -sf "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=$GEMINI_API_KEY" \
+RESPONSE=$(curl -sf "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=$GEMINI_API_KEY" \
   -H "Content-Type: application/json" \
-  -d "$PAYLOAD" | jq -r '.candidates[0].content.parts[0].text'
+  -d "$PAYLOAD")
+
+# 応答テキスト
+echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "(empty — thinking で枯渇の可能性。maxOutputTokens を増やすか thinkingBudget: 0 を試す)"'
+
+# 使用量 (thinking tokens は output 料金で課金される)
+echo ""
+echo "=== 使用量 ==="
+echo "$RESPONSE" | jq -r '.usageMetadata | "  入力: \(.promptTokenCount), 出力: \(.candidatesTokenCount // 0), 思考: \(.thoughtsTokenCount // 0), 計: \(.totalTokenCount)"'
+echo "  終了理由: $(echo "$RESPONSE" | jq -r '.candidates[0].finishReason // "?")"
+```
+
+#### thinking 無効化が望ましいケース
+
+```bash
+# 簡潔な指摘のみ欲しい場合 (コスト 60-75% 削減)
+PAYLOAD=$(jq -n --arg content "$PROMPT" '{
+  contents: [{parts: [{text: $content}]}],
+  generationConfig: {
+    temperature: 0.2,
+    maxOutputTokens: 4096,
+    thinkingConfig: {thinkingBudget: 0}
+  }
+}')
 ```
 
 ### 5. 結果表示
@@ -161,9 +188,11 @@ curl -sf "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro
 
 Gemini 2.5 Pro:
 - Input: $1.25 / 1M token (200K まで) / $2.50 / 1M (超過分)
-- Output: $10 / 1M token
+- Output: $10 / 1M token (**thinking tokens を含む**)
 
-500 ファイル (2.5M token) を 1 回投げると input $5 程度。**頻発させない用途**として設計済み。
+実測 (Phase 4): 1453 input + 1196 output + **3688 thinking** = 6337 token → 約 $0.051 (8 円)。**thinking が出力料金の 3 倍以上を占める** ことに注意。
+
+500 ファイル (2.5M token) を 1 回投げると input $5 程度。**頻発させない用途**として設計済み。簡潔な指摘で十分な場合は `thinkingConfig.thinkingBudget: 0` で 60-75% 削減可能。
 
 ## 注意事項
 
