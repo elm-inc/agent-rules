@@ -152,11 +152,45 @@ DeepSeek-R1 でプロパティテストの不変条件を発想:
 - 列挙結果と実装を表示
 - ユーザーに **保存先パス** を確認 (既存テスト隣 or 新規)
 - 承認後、Write/Edit で保存
-- テストを 1 回実行して赤緑を確認
+
+### 6. 生成テストの実行検証 (Phase 5 追加)
+
+> **重要 (Phase 4 で判明)**: AI 生成 assertion は実コードと **一致しないことがある** (例: 期待 `"1分"` だが実装は `"1分0秒"`)。必ず実行して赤緑確認する。
 
 ```bash
-# 例: pytest
-pytest "$NEW_TEST_PATH" -v
+# 1. テストをまず実行
+pytest "$NEW_TEST_PATH" -v 2>&1 | tee /tmp/test-result.txt
+
+# 2. 全部緑なら完了
+if [ $? -eq 0 ]; then
+  echo "✓ 全テスト pass"
+  exit 0
+fi
+
+# 3. 赤テストがある場合、Claude に判断を仰ぐ:
+#    - 実装側のバグ → 実装を直す
+#    - assertion 側の誤り (AI の期待値間違い) → assertion を直す
+#    - どちらか不明 → ユーザーに確認
+echo "✗ 失敗テスト発見。実装 vs assertion のどちらが正しいか判断する:"
+grep -E "FAILED|AssertionError" /tmp/test-result.txt
+```
+
+## Qwen context 制約への対処 (Phase 5 追加)
+
+> **Phase 4 で判明**: vLLM の `--max-model-len 4096` 制約下で、入力 + 出力 > 4096 だと `VLLMValidationError`。
+
+`max_tokens` を **動的に決定** する:
+
+```bash
+# vLLM の context 上限を取得
+MAX_LEN=$(curl -s "${LOCAL_LLM_BASE_URL}/models" | jq -r '.data[0].max_model_len // 4096')
+
+# 入力 token を推定 (粗く 4 chars/token)
+INPUT_TOK=$(( ${#PROMPT} / 4 ))
+
+# 安全マージン 100 を引いて出力 token 上限を決定
+MAX_OUT=$(( MAX_LEN - INPUT_TOK - 100 ))
+[ "$MAX_OUT" -lt 500 ] && MAX_OUT=500  # 最低 500 は確保
 ```
 
 ## API 呼び出し詳細

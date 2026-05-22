@@ -97,15 +97,31 @@ git show "$SHA"
 
 ### 4. vLLM 呼び出し
 
+> **Phase 5 改善**: vLLM の `max_model_len` から動的に `max_tokens` を計算する (Phase 2 で 4096 に縮小したため、ハードコード 4096 だと OOM/overflow)。
+
 ```bash
+# context 上限を取得 (Phase 2 設定で 4096、Phase 5 以降で 8192 想定)
+MAX_LEN=$(curl -s "$BASE_URL/models" | jq -r '.data[0].max_model_len // 4096')
+INPUT_TOK=$(( ${#PROMPT} / 4 ))
+MAX_OUT=$(( MAX_LEN - INPUT_TOK - 100 ))
+[ "$MAX_OUT" -lt 500 ] && MAX_OUT=500
+
+# 差分が context を超えそうなら ファイル単位に分割を勧告
+EST_TOTAL_TOK=$(( ${#PROMPT} / 4 ))
+if [ "$EST_TOTAL_TOK" -gt "$MAX_LEN" ]; then
+  echo "WARNING: 推定 ${EST_TOTAL_TOK} tok > context ${MAX_LEN} tok"
+  echo "  → ファイル単位での分割実行を推奨。git diff --name-only で対象抽出して順次実行。"
+fi
+
 PAYLOAD=$(jq -n \
   --arg model "$MODEL_NAME" \
   --arg content "$PROMPT" \
+  --argjson max_out "$MAX_OUT" \
   '{
     model: $model,
     messages: [{role: "user", content: $content}],
     temperature: 0.2,
-    max_tokens: 4096
+    max_tokens: $max_out
   }')
 
 curl -sf "$BASE_URL/chat/completions" \
