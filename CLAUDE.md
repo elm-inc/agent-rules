@@ -2,21 +2,63 @@
 
 **重要: 最初に `~/RULES.md` を読み込み、記載されたルールをすべて遵守すること。**
 
-## Codex CLI 連携
-Codex CLI（OpenAI）をセカンドオピニオンやタスク委譲に活用する。
+## AI 開発ワークフロー (多層・多モデル)
+
+実装は Claude Opus 4.7、レビュー・検証・テスト生成は **複数 LLM の役割分担 + 機械検証** で多層化する。同じ間違いをしないよう、Anthropic/OpenAI 系に偏らせず Gemini・DeepSeek・ローカル LLM を混ぜる。
+
+### 役割分担
+
+| ロール | モデル / ツール | スキル |
+|---|---|---|
+| 実装 (主) | Claude Opus 4.7 | (Claude Code 本体) |
+| 0 次レビュー (高速・無料) | ローカル Qwen2.5-Coder-32B (vLLM, FP8) | `/local-review` |
+| セカンドオピニオン (異種ベンダー) | Codex (GPT-5) | `/codex-review`, `/codex-task`, `/codex-audit` |
+| 設計レッドチーム (思考連鎖) | DeepSeek-R1 (API) | `/deepseek-redteam` |
+| リポ横断 (1M context) | Gemini 2.5 Pro (API) | `/gemini-review` |
+| テスト生成 | Qwen (主) + DeepSeek-R1 (property 発想) | `/test-generate` |
+| テストデータ生成 | Qwen (バッチ推論) | `/test-data` |
+| 機械検証 | pre-commit hooks (ruff/mypy/semgrep/type-check) | (各リポで設定) |
 
 ### スキル一覧
+
 | スキル | 用途 | コマンド例 |
 |--------|------|-----------|
-| `/codex-review` | 差分のコードレビュー依頼 | `/codex-review`, `/codex-review --base main` |
-| `/codex-audit` | プロジェクト全体の網羅的レビュー | `/codex-audit`, `/codex-audit セキュリティ` |
-| `/codex-task` | 修正・実装タスク依頼 | `/codex-task エラーハンドリングを追加` |
+| `/local-review` | 差分の 0 次レビュー (秒オーダー) | `/local-review`, `/local-review --base main` |
+| `/codex-review` | Codex によるセカンドオピニオン | `/codex-review`, `/codex-review --base main` |
+| `/codex-audit` | Codex による全体監査 | `/codex-audit`, `/codex-audit セキュリティ` |
+| `/codex-task` | Codex に修正・実装を委譲 | `/codex-task エラーハンドリングを追加` |
+| `/deepseek-redteam` | 設計・差分の盲点炙り出し | `/deepseek-redteam --design docs/design/foo.md` |
+| `/gemini-review` | リポ横断・ADR 整合性レビュー (1M context) | `/gemini-review --scope apps/web` |
+| `/test-generate` | テストケース列挙 + 実装生成 | `/test-generate src/utils/date.ts:format` |
+| `/test-data` | 業務的に妥当なテストデータ生成 | `/test-data app/models/user.py:User --count 50` |
 
-### コミット時のフロー
-1. コード変更・テスト完了
-2. **`/codex-review`** で Codex にレビューを依頼（uncommitted な変更が対象）
-3. レビュー結果を確認し、重大な指摘があれば修正
-4. 問題なければコミットを実行
+### コミット時のフロー (推奨)
+
+```
+[設計]
+  Claude が docs/design/foo.md 起草
+   └→ /deepseek-redteam で盲点炙り出し
+   └→ (任意) /codex-audit で実装視点ツッコミ
+
+[実装]
+  Opus 4.7 で実装
+
+[コミット前]
+  /local-review                      ← 0 次 (秒)
+  pre-commit hooks (型/lint/semgrep) ← 機械
+  (必要時) /test-generate            ← テスト追加
+  /codex-review                      ← セカンドオピニオン
+  (必要時) /gemini-review            ← リポ横断
+
+[実行検証]
+  /verify (Claude Code 標準スキル), E2E
+```
+
+軽微な変更では `/local-review` + pre-commit のみで十分。`/gemini-review` は 10+ ファイル変更や ADR drift 疑い時のみ。
+
+### セットアップ
+
+新規マシンでローカル LLM 系スキルを使う前に [`docs/setup/local-llm.md`](docs/setup/local-llm.md) の手順で vLLM サーバを起動する。クラウド系は `GEMINI_API_KEY` / `DEEPSEEK_API_KEY` を `~/.bashrc` に追加。
 
 ## 並列開発 (git worktree)
 タスクごとに git worktree を分離し、複数の Claude Code セッションで安全に並列開発する。
