@@ -147,7 +147,7 @@ echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "(empty — th
 echo ""
 echo "=== 使用量 ==="
 echo "$RESPONSE" | jq -r '.usageMetadata | "  入力: \(.promptTokenCount), 出力: \(.candidatesTokenCount // 0), 思考: \(.thoughtsTokenCount // 0), 計: \(.totalTokenCount)"'
-echo "  終了理由: $(echo "$RESPONSE" | jq -r '.candidates[0].finishReason // "?")"
+echo "  終了理由: $(echo "$RESPONSE" | jq -r '.candidates[0].finishReason // "?"')"
 ```
 
 #### thinking 無効化が望ましいケース
