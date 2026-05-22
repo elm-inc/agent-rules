@@ -1,0 +1,33 @@
+[Unit]
+Description=vLLM Qwen2.5-Coder-32B (FP8) Server
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/usr/bin/docker stop vllm-qwen-coder
+ExecStartPre=-/usr/bin/docker rm vllm-qwen-coder
+ExecStart=/usr/bin/docker run -d \
+  --restart unless-stopped \
+  --name vllm-qwen-coder \
+  --gpus all \
+  --ipc=host \
+  -p 8000:8000 \
+  -v /home/elmo/models:/root/.cache/huggingface \
+  vllm/vllm-openai:latest \
+  --model Qwen/Qwen2.5-Coder-32B-Instruct \
+  --quantization fp8 \
+  --max-model-len 32768 \
+  --gpu-memory-utilization 0.85 \
+  --served-model-name qwen-coder
+ExecStop=/usr/bin/docker stop vllm-qwen-coder
+
+[Install]
+WantedBy=multi-user.target
+
+# === 設置手順 (要 root) ===
+# sudo cp scripts/vllm-qwen.service /etc/systemd/system/
+# sudo systemctl daemon-reload
+# sudo systemctl enable --now vllm-qwen.service
+# sudo systemctl status vllm-qwen.service
