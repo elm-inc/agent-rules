@@ -131,9 +131,12 @@ worktree との統合は `/worktree-start <name> --linear <ID>` で行う (Issue
 各マシンで 1 回だけ実行:
 
 ```bash
-claude mcp add --transport sse --scope user linear https://mcp.linear.app/sse
+claude mcp add --transport http --scope user linear https://mcp.linear.app/mcp
 # Claude Code セッション内で /mcp linear → OAuth 認証
 ```
+
+> **注記**: 旧 `--transport sse https://mcp.linear.app/sse` は 2026-04-08 で deprecated。既に SSE で登録済みの場合は `claude mcp remove linear -s user` してから上記コマンドで再登録する。
+> 移行ガイド: https://linear.app/docs/mcp
 
 ### 運用フロー
 
