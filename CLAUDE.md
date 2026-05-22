@@ -2,21 +2,63 @@
 
 **重要: 最初に `~/RULES.md` を読み込み、記載されたルールをすべて遵守すること。**
 
-## Codex CLI 連携
-Codex CLI（OpenAI）をセカンドオピニオンやタスク委譲に活用する。
+## AI 開発ワークフロー (多層・多モデル)
+
+実装は Claude Opus 4.7、レビュー・検証・テスト生成は **複数 LLM の役割分担 + 機械検証** で多層化する。同じ間違いをしないよう、Anthropic/OpenAI 系に偏らせず Gemini・DeepSeek・ローカル LLM を混ぜる。
+
+### 役割分担
+
+| ロール | モデル / ツール | スキル |
+|---|---|---|
+| 実装 (主) | Claude Opus 4.7 | (Claude Code 本体) |
+| 0 次レビュー (高速・無料) | ローカル Qwen2.5-Coder-32B (vLLM, FP8) | `/local-review` |
+| セカンドオピニオン (異種ベンダー) | Codex (GPT-5) | `/codex-review`, `/codex-task`, `/codex-audit` |
+| 設計レッドチーム (思考連鎖) | DeepSeek-R1 (API) | `/deepseek-redteam` |
+| リポ横断 (1M context) | Gemini 2.5 Pro (API) | `/gemini-review` |
+| テスト生成 | Qwen (主) + DeepSeek-R1 (property 発想) | `/test-generate` |
+| テストデータ生成 | Qwen (バッチ推論) | `/test-data` |
+| 機械検証 | pre-commit hooks (ruff/mypy/semgrep/type-check) | (各リポで設定) |
 
 ### スキル一覧
+
 | スキル | 用途 | コマンド例 |
 |--------|------|-----------|
-| `/codex-review` | 差分のコードレビュー依頼 | `/codex-review`, `/codex-review --base main` |
-| `/codex-audit` | プロジェクト全体の網羅的レビュー | `/codex-audit`, `/codex-audit セキュリティ` |
-| `/codex-task` | 修正・実装タスク依頼 | `/codex-task エラーハンドリングを追加` |
+| `/local-review` | 差分の 0 次レビュー (秒オーダー) | `/local-review`, `/local-review --base main` |
+| `/codex-review` | Codex によるセカンドオピニオン | `/codex-review`, `/codex-review --base main` |
+| `/codex-audit` | Codex による全体監査 | `/codex-audit`, `/codex-audit セキュリティ` |
+| `/codex-task` | Codex に修正・実装を委譲 | `/codex-task エラーハンドリングを追加` |
+| `/deepseek-redteam` | 設計・差分の盲点炙り出し | `/deepseek-redteam --design docs/design/foo.md` |
+| `/gemini-review` | リポ横断・ADR 整合性レビュー (1M context) | `/gemini-review --scope apps/web` |
+| `/test-generate` | テストケース列挙 + 実装生成 | `/test-generate src/utils/date.ts:format` |
+| `/test-data` | 業務的に妥当なテストデータ生成 | `/test-data app/models/user.py:User --count 50` |
 
-### コミット時のフロー
-1. コード変更・テスト完了
-2. **`/codex-review`** で Codex にレビューを依頼（uncommitted な変更が対象）
-3. レビュー結果を確認し、重大な指摘があれば修正
-4. 問題なければコミットを実行
+### コミット時のフロー (推奨)
+
+```
+[設計]
+  Claude が docs/design/foo.md 起草
+   └→ /deepseek-redteam で盲点炙り出し
+   └→ (任意) /codex-audit で実装視点ツッコミ
+
+[実装]
+  Opus 4.7 で実装
+
+[コミット前]
+  /local-review                      ← 0 次 (秒)
+  pre-commit hooks (型/lint/semgrep) ← 機械
+  (必要時) /test-generate            ← テスト追加
+  /codex-review                      ← セカンドオピニオン
+  (必要時) /gemini-review            ← リポ横断
+
+[実行検証]
+  /verify (Claude Code 標準スキル), E2E
+```
+
+軽微な変更では `/local-review` + pre-commit のみで十分。`/gemini-review` は 10+ ファイル変更や ADR drift 疑い時のみ。
+
+### セットアップ
+
+新規マシンでローカル LLM 系スキルを使う前に [`docs/setup/local-llm.md`](docs/setup/local-llm.md) の手順で vLLM サーバを起動する。クラウド系は `GEMINI_API_KEY` / `DEEPSEEK_API_KEY` を `~/.bashrc` に追加。
 
 ## 並列開発 (git worktree)
 タスクごとに git worktree を分離し、複数の Claude Code セッションで安全に並列開発する。
@@ -24,9 +66,9 @@ Codex CLI（OpenAI）をセカンドオピニオンやタスク委譲に活用�
 ### スキル一覧
 | スキル | 用途 | コマンド例 |
 |--------|------|-----------|
-| `/worktree-start` | worktree 作成 + タスク登録 | `/worktree-start feat-auth ユーザー認証の追加` |
+| `/worktree-start` | worktree 作成 + タスク登録 (`--linear <ID>` で Issue 連携) | `/worktree-start feat-auth ユーザー認証 --linear ELM-123` |
 | `/worktree-list` | 全タスクの状況・衝突リスク確認 | `/worktree-list` |
-| `/worktree-finish` | マージ + worktree 削除 | `/worktree-finish feat-auth` |
+| `/worktree-finish` | マージ + worktree 削除 (Linear 自動 Done) | `/worktree-finish feat-auth` |
 
 ### 並列開発フロー（デフォルト: 単一セッション）
 1. `/worktree-start <タスク名> <説明>` で worktree 作成
@@ -41,6 +83,72 @@ Codex CLI（OpenAI）をセカンドオピニオンやタスク委譲に活用�
 - `<repo>/.git/parallel-tasks.json` に全タスク情報を記録
 - 全 worktree から共有参照できるため、どのセッションからでも `/worktree-list` で全体を俯瞰可能
 - 変更ファイルの重複がある場合は衝突リスクとして警告される
+
+## Linear イシュー管理
+
+進捗・期日・ステークホルダー可視化は **Linear** に集約する。AI が読みやすい設計・決定ドキュメントは `docs/` に残し、コードレビューは GitHub PR を使う。各ツールの得意領域だけで運用し、重複を排除する。
+
+### 役割分担
+
+| 関心事 | 担当 |
+|---|---|
+| 期日・進捗・状態 (Todo/In Progress/Done, cycle) | **Linear** |
+| ステークホルダー可視化・優先度・ロードマップ | **Linear** |
+| Why (なぜそう決めたか) | `docs/adr/` |
+| How (動作・状態機械) | `docs/architecture/` |
+| What (詳細仕様・実装計画) | `docs/design/` |
+| コード・差分・レビュー | GitHub PR |
+| AI セッション文脈 | memory |
+| worktree のローカル状態 | `parallel-tasks.json` |
+
+**重複禁止**: Linear Issue description には「短い要約 + docs/design/foo.md へのリンク」だけ書く。本文は docs に。
+
+### Linear 内の構造
+
+- **Project** = 多段階タスク (Phase 1-N のリファクタなど)。期日と進捗率を持つ
+- **Issue** = 1 worktree = 1 PR の粒度
+- **サブ Issue** = Project 内の Phase。parent-child で表現
+
+### 相互リンク
+
+- Branch 名: `worktree/<linear-id-lowercase>-<task-name>` → Linear が PR を自動紐付け
+- Commit message: `feat: ... (ELM-123)`
+- docs/design/*.md 冒頭: `- Linear: ELM-123`
+- Linear Issue description: `docs/design/foo.md` への GitHub blob URL
+
+### スキル一覧
+
+| スキル | 用途 | コマンド例 |
+|--------|------|-----------|
+| `/linear-status` | Project / Issue / cycle の現状表示 | `/linear-status`, `/linear-status --mine` |
+| `/linear-issue` | Issue の作成・表示・状態変更 | `/linear-issue create "Phase 6 着手"`, `/linear-issue done ELM-106` |
+| `/linear-plan` | Project + サブ Issue を一括作成 (大規模計画用) | `/linear-plan "apps/batch test refactor" --design test-refactor-plan.md` |
+
+worktree との統合は `/worktree-start <name> --linear <ID>` で行う (Issue を In Progress に遷移、`/worktree-finish` で Done に遷移)。
+
+### 初回セットアップ
+
+各マシンで 1 回だけ実行:
+
+```bash
+claude mcp add --transport http --scope user linear https://mcp.linear.app/mcp
+# Claude Code セッション内で /mcp linear → OAuth 認証
+```
+
+> **注記**: 旧 `--transport sse https://mcp.linear.app/sse` は 2026-04-08 で deprecated。既に SSE で登録済みの場合は `claude mcp remove linear -s user` してから上記コマンドで再登録する。
+> 移行ガイド: https://linear.app/docs/mcp
+
+### 運用フロー
+
+1. 新計画 → `docs/design/foo.md` を書く → `/linear-plan` で Project + サブ Issue 作成
+2. Phase 着手 → `/worktree-start <name> --linear <ID>` で worktree 作成 + Issue を In Progress
+3. 実装 → コミット message に Issue ID 埋め込み (`feat: ... (ELM-123)`)
+4. PR → branch 名から Linear が自動で PR を紐付け
+5. マージ → `/worktree-finish` が Issue を Done に遷移
+
+### Linear Docs は使わない
+
+ドキュメント本体は `docs/` (Markdown) に置く。Linear の **Docs/Wiki 機能** は AI 摩擦・vendor lock-in のため採用しない (Issue 管理のみ Linear を使う)。
 
 ## ドキュメント・図式
 
