@@ -1,0 +1,20 @@
+[Unit]
+Description=webcam-jetson HTTP API (snapshot / stream / record)
+After=webcam-mediamtx.service network-online.target
+Wants=webcam-mediamtx.service
+
+[Service]
+Type=simple
+User=__WCAM_USER__
+SupplementaryGroups=video
+Environment=WCAM_RTSP_URL=rtsp://127.0.0.1:8554/cam
+Environment=WCAM_REC_DIR=/var/lib/webcam-jetson/recordings
+Environment=WCAM_PORT=8088
+ExecStart=/opt/webcam-jetson/venv/bin/python /opt/webcam-jetson/webcam_server.py
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
