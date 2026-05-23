@@ -277,4 +277,6 @@ def make_app() -> web.Application:
 
 if __name__ == "__main__":
     print(f"[webcam-server] listening {LISTEN_HOST}:{LISTEN_PORT}, RTSP={RTSP_URL}, recs={REC_DIR}", flush=True)
-    web.run_app(make_app(), host=LISTEN_HOST, port=LISTEN_PORT, access_log=None)
+    # reuse_address: systemd 再起動ループ中に TIME_WAIT の socket が残っていても bind できるように。
+    web.run_app(make_app(), host=LISTEN_HOST, port=LISTEN_PORT,
+                access_log=None, reuse_address=True)

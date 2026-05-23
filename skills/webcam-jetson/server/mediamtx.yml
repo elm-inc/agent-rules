@@ -8,7 +8,6 @@ logDestinations: [stdout]
 # RTSP server
 rtsp: yes
 rtspAddress: :8554
-rtspTransports: [tcp, udp]
 protocols: [tcp, udp]
 
 # HLS server (browser-friendly)
