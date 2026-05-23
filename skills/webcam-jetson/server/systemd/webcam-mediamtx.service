@@ -1,0 +1,19 @@
+[Unit]
+Description=mediamtx (webcam-jetson)
+Documentation=https://github.com/bluenviron/mediamtx
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__WCAM_USER__
+SupplementaryGroups=video
+ExecStart=/usr/local/bin/mediamtx /etc/webcam-jetson/mediamtx.yml
+Restart=on-failure
+RestartSec=2
+# mediamtx spawns ffmpeg for V4L2 capture — keep stderr in journal
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
