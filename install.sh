@@ -45,4 +45,14 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
 done
 
 echo ""
+echo "== Bash integration =="
+SNIPPET='source $HOME/.claude/skills/cli-help/bash.sh'
+if grep -qxF "$SNIPPET" "$HOME/.bashrc" 2>/dev/null; then
+    echo "ok:   .bashrc already sources cli-help/bash.sh"
+else
+    printf '\n# modern CLI cheatsheet & soft reminder (agent-rules)\n%s\n' "$SNIPPET" >> "$HOME/.bashrc"
+    echo "add:  .bashrc <- source cli-help/bash.sh"
+fi
+
+echo ""
 echo "Install complete."

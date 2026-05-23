@@ -217,6 +217,33 @@ claude mcp add --transport http --scope user linear https://mcp.linear.app/mcp
 
 設計変更時は **ADR（なぜ）→ architecture（どう動くか）→ コード（実装）** の順で更新する。図がコードから drift しないよう注意する。
 
+## シェル環境 (モダン CLI ツール)
+
+Rust 製モダン CLI ツール (`rg`, `fd`, `bat`, `eza`, `dust`, `btm`, `procs`, `delta`, `sd`, `hyperfine`, `tldr`, `jless`, `tokei`, `zoxide`) を覚えきれず使えていない問題を解消するための仕組み。
+
+### スキル一覧
+
+| スキル | 用途 | コマンド例 |
+|--------|------|-----------|
+| `/cli-help` | モダン CLI ツールの使い方を即引き (旧コマンド名でも逆引き可) | `/cli-help rg`, `/cli-help grep` |
+
+### シェル側の機能
+
+`install.sh` が `~/.bashrc` に `source $HOME/.claude/skills/cli-help/bash.sh` を追記する。これで以下が有効化される:
+
+- **`cheat <tool>`**: チートシートを即引きする bash 関数。引数なしで全文、引数ありで該当セクション抜粋。`cheat -i` で fzf 対話選択。
+- **soft reminder**: `grep / find / cat / top / du / sed / ps` を関数でラップ。セッションごとに 1 回だけ「これを試してみては」と dim yellow で stderr に hint を出してから本物を実行する。`command grep ...` でバイパス可能。
+- 全停止: `export MODERN_CLI_HINTS=0` を `~/.bashrc` に追記すると関数ラップ自体が定義されない (cheat は使える)。
+
+### 推奨ツールのインストール
+
+不足分は `bash ~/repos/github.com/elm-inc/agent-rules/scripts/install-modern-cli.sh` で cargo 経由で一括導入。`install.sh` 本体には含めない (cargo build が長いため)。
+
+### 設計 Tips (将来再検討時の判断材料)
+
+- **エイリアス上書き (`alias grep=rg` 等) はしない**。rg と grep は再帰デフォルト・gitignore 認識など挙動差があり、スクリプトの動作を壊す。関数ラップ + `command grep` バイパスのほうが安全。
+- **`ls` は wrap 対象から外している**。発火頻度が高すぎて hint が心理的負荷になるため。早見表に逆引きを残し、能動的に `cheat eza` で参照する運用。
+
 ## このリポジトリ (agent-rules) の運用
 
 `agent-rules` リポは **ルール・テンプレート・スキルの単一ソース**。各マシンの `~/CLAUDE.md`, `~/RULES.md`, `~/AGENTS.md`, `~/.claude/skills/*` は本リポへの symlink で同期する。
