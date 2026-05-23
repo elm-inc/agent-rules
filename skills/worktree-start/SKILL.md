@@ -1,7 +1,7 @@
 ---
 name: worktree-start
 description: 並列開発用の git worktree を作成し、タスクをレジストリに登録する。新しいタスクを並列で始めたい、worktree を作りたいときに使用
-argument-hint: <タスク名> <タスクの説明> [--linear <ID>]
+argument-hint: <タスク名> <タスクの説明> [--linear <ID>] [--no-remote]
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(jq *) Bash(cat *) Bash(mkdir *) Bash(date *) mcp__linear__* Read Write
 ---
@@ -19,6 +19,7 @@ git worktree を作成し、並列開発タスクをレジストリに登録す�
   - ブランチ名が `worktree/<linear-id-lowercase>-<タスク名>` になる (Linear 側で PR 自動紐付け)
   - Linear Issue を In Progress に遷移
   - `parallel-tasks.json` に `linear_issue_id` を記録
+- `--no-remote`: Remote Control 付き起動コマンドを案内しない。指定しない場合 (デフォルト) は最終案内に `claude --remote-control "<タスク名>"` を含める (iPhone 公式 Claude アプリの Code タブから push 通知・状態確認可能)
 
 タスク名が未指定の場合はユーザーに確認する。Linear 運用ポリシー (project_linear_workflow メモリ) に従い、ステークホルダー可視化が必要な作業は `--linear` を付ける。
 
@@ -74,7 +75,7 @@ git worktree を作成し、並列開発タスクをレジストリに登録す�
 - jq がインストールされていない場合は Python の json モジュールで代替する
 
 ### 5. ユーザーへの案内
-以下を表示する (Linear 連携時は Issue 情報も含める):
+以下を表示する (Linear 連携時は Issue 情報も含める)。デフォルトでは Remote Control 付きの起動コマンドを案内する。`--no-remote` が指定された場合は `--remote-control ...` 部分を省く。
 
 ```
 worktree を作成しました:
@@ -84,7 +85,9 @@ worktree を作成しました:
             <Issue URL>
 
 新しい Claude Code セッションを以下で起動してください:
-  cd <worktree パス> && claude
+  cd <worktree パス> && claude --remote-control "<タスク名>"   ← --no-remote 指定時は `claude` のみ
+
+(iPhone 公式 Claude アプリの Code タブから push 通知・接続切替が可能。Pro プラン以上必須)
 
 他のタスクの状況は /worktree-list で確認できます。
 完了後は /worktree-finish でマージしてください。

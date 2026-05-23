@@ -87,7 +87,9 @@
 3. 作業完了後、メインワークツリーに戻って `/worktree-finish` でマージ
 
 ### 並列セッションを使う場合（独立タスクを同時進行する時のみ）
-- 真に並列化したい時だけ別セッションを起動: `cd <worktree path> && claude`
+- 真に並列化したい時だけ別セッションを起動: `cd <worktree path> && claude --remote-control "<タスク名>"`
+- `--remote-control` を付けると iPhone 公式 Claude アプリの Code タブから push 通知・接続切替が可能 (Pro プラン以上必須)
+- `/worktree-start` の最終案内が自動でこの起動コマンドを表示する (Remote Control 不要なら `/worktree-start ... --no-remote`)
 - 依存関係のあるタスクや逐次進めるタスクは単一セッションで切り替えながら進める
 
 ### タスクレジストリ
