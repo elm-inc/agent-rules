@@ -86,9 +86,9 @@ cat <<EOF
 \033[1;32m==> done.\033[0m
 
 URLs (Tailnet host: ${HOSTNAME_SHORT}):
-  HTTP API   : http://${HOSTNAME_SHORT}:8080/healthz
-  Snapshot   : http://${HOSTNAME_SHORT}:8080/snapshot.jpg
-  MJPEG live : http://${HOSTNAME_SHORT}:8080/stream.mjpg
+  HTTP API   : http://${HOSTNAME_SHORT}:8088/healthz
+  Snapshot   : http://${HOSTNAME_SHORT}:8088/snapshot.jpg
+  MJPEG live : http://${HOSTNAME_SHORT}:8088/stream.mjpg
   RTSP       : rtsp://${HOSTNAME_SHORT}:8554/cam
   HLS        : http://${HOSTNAME_SHORT}:8888/cam/index.m3u8
 

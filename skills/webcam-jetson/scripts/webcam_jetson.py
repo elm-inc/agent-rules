@@ -36,7 +36,7 @@ else:
 CONFIG_PATH = Path.home() / ".config" / "webcam-jetson.toml"
 DEFAULTS = {
     "http_host": "jetson-nano",
-    "http_port": 8080,
+    "http_port": 8088,
     "rtsp_port": 8554,
     "hls_port": 8888,
     "ssh_host": "elmo@jetson-nano",

@@ -21,7 +21,7 @@ Jetson (例: `jetson-nano` on Tailscale) に USB カメラ (例: Logitech C920) 
                     │  mediamtx ──► RTSP :8554/cam   HLS :8888/cam   API 127.0.0.1:9997│
                     │      ▲                                                            │
                     │      │ pull (RTSP TCP)                                            │
-                    │  webcam_server.py (aiohttp :8080)                                │
+                    │  webcam_server.py (aiohttp :8088)                                │
                     │      ├─ GET  /snapshot.jpg     (ffmpeg -frames:v 1)              │
                     │      ├─ GET  /stream.mjpg      (ffmpeg -f mpjpeg)                │
                     │      ├─ POST /record?duration  (ffmpeg -t N, mkv copy or mp4)    │
@@ -47,7 +47,7 @@ Jetson (例: `jetson-nano` on Tailscale) に USB カメラ (例: Logitech C920) 
 1. CLI 引数 (`--host`, `--port`, `--ssh-host`)
 2. 環境変数 (`WCAM_HTTP_HOST`, `WCAM_HTTP_PORT`, `WCAM_SSH_HOST`)
 3. `~/.config/webcam-jetson.toml`
-4. デフォルト (`jetson-nano:8080`, `elmo@jetson-nano`)
+4. デフォルト (`jetson-nano:8088`, `elmo@jetson-nano`)
 
 ### 設定ファイルの例
 
@@ -55,7 +55,7 @@ Jetson (例: `jetson-nano` on Tailscale) に USB カメラ (例: Logitech C920) 
 
 ```toml
 http_host = "jetson-nano"
-http_port = 8080
+http_port = 8088
 ssh_host  = "elmo@jetson-nano"
 ```
 
@@ -139,7 +139,7 @@ uv run ${SKILL_DIR}/scripts/webcam_jetson.py stream-url hls       # ブラウザ
 
 | プロトコル | URL 形式 | 用途 |
 |---|---|---|
-| `mjpeg` | `http://<host>:8080/stream.mjpg` | ブラウザ直接視聴・最低 latency |
+| `mjpeg` | `http://<host>:8088/stream.mjpg` | ブラウザ直接視聴・最低 latency |
 | `rtsp`  | `rtsp://<host>:8554/cam` | OBS / VLC / 解析パイプライン |
 | `hls`   | `http://<host>:8888/cam/index.m3u8` | iOS Safari / 長時間視聴 |
 
@@ -180,7 +180,7 @@ uv run ${SKILL_DIR}/scripts/webcam_jetson.py logs --unit webcam-mediamtx -n 200
 
 | port | サービス | 用途 |
 |---|---|---|
-| 8080 | webcam-server (aiohttp) | HTTP API (snapshot / mjpeg / record / healthz) |
+| 8088 | webcam-server (aiohttp) | HTTP API (snapshot / mjpeg / record / healthz) |
 | 8554 | mediamtx | RTSP |
 | 8888 | mediamtx | HLS |
 | 9997 | mediamtx | local API (127.0.0.1 のみ bind) |
