@@ -140,6 +140,41 @@ bash scripts/vllm-verify-model.sh deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
 HF Hub の API から取得した safetensors SHA256 をローカルファイルと照合する。
 publisher allowlist: `Qwen / deepseek-ai / RedHatAI / mistralai / google / meta-llama`。それ以外は明示的に拒否。
 
+### systemd unit 化 (AGENT-14, 手動 install 推奨)
+
+`docker run --restart unless-stopped` の常駐は維持はされるが、ブート時の起動順序制御 / journalctl ログ統一 / `vllm-swap-to.sh` との排他制御のため systemd unit 化推奨。テンプレ: [`templates/systemd/vllm-qwen-coder.service`](../../templates/systemd/vllm-qwen-coder.service)。
+
+セットアップ手順:
+
+```bash
+# 1) ユニットファイル配置
+sudo cp ~/repos/github.com/elm-inc/agent-rules/templates/systemd/vllm-qwen-coder.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# 2) HF token を 600 権限ファイルに分離 (inline 漏洩防止)
+sudo install -m 600 /dev/null /etc/vllm-qwen-coder.env
+echo "HUGGING_FACE_HUB_TOKEN=$(cat ~/.hf_token)" | sudo tee -a /etc/vllm-qwen-coder.env > /dev/null
+sudo chmod 600 /etc/vllm-qwen-coder.env  # 念のため再確認
+
+# 3) 既存 docker --restart コンテナを停止 (移行のためダウンタイム ~2 分)
+docker stop vllm-qwen-coder && docker rm vllm-qwen-coder
+
+# 4) systemd 経由で起動 + boot 自動起動有効化
+sudo systemctl enable --now vllm-qwen-coder
+sudo systemctl status vllm-qwen-coder
+
+# 5) 初回起動を 1-2 分待ってヘルスチェック
+sleep 90 && curl -sf http://localhost:8000/v1/models | jq -r '.data[].id'
+
+# 6) journalctl でログ確認
+journalctl -u vllm-qwen-coder -f
+```
+
+確認ポイント:
+- `systemctl status` で `Active: active (running)` であること
+- `/etc/vllm-qwen-coder.env` が `-rw-------` であること (`ls -la /etc/vllm-qwen-coder.env`)
+- ブート再起動後も自動で立ち上がること (`sudo reboot` で確認、ただし計画停止時のみ)
+
 ### HF cache の場所 (Phase 7 で判明)
 
 - 既存 (現状): `~/models/hub/` (docker volume 経由で root 所有、elmo から書けない)

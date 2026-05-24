@@ -1,0 +1,74 @@
+# vLLM Qwen-Coder-32B FP8 常駐 (ADR-0001 + Phase 7 ロード戦略 A 案)
+# AGENT-14 で確立。docker run --restart unless-stopped からの置換え。
+#
+# install:
+#   sudo cp templates/systemd/vllm-qwen-coder.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#
+#   # HUGGING_FACE_HUB_TOKEN を含む env ファイル準備 (mode 600 必須):
+#   install -m 600 /dev/null /etc/vllm-qwen-coder.env
+#   sudo tee /etc/vllm-qwen-coder.env > /dev/null <<EOF
+#   HUGGING_FACE_HUB_TOKEN=$(cat ~/.hf_token)
+#   EOF
+#   sudo chmod 600 /etc/vllm-qwen-coder.env
+#
+#   # 既存 docker --restart コンテナを停止
+#   docker stop vllm-qwen-coder && docker rm vllm-qwen-coder
+#
+#   # systemd 経由で起動
+#   sudo systemctl enable --now vllm-qwen-coder
+#   sudo systemctl status vllm-qwen-coder
+#   journalctl -u vllm-qwen-coder -f   # ログ確認
+#
+# 詳細: docs/setup/local-llm.md の "systemd unit 化" セクション
+
+[Unit]
+Description=vLLM Qwen2.5-Coder-32B FP8 (常駐モデル, ADR-0001/0002)
+Documentation=https://github.com/elm-inc/agent-rules/blob/main/docs/setup/local-llm.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# クラッシュ時は 30 秒待って再起動 (docker --restart unless-stopped 同等)
+Restart=on-failure
+RestartSec=30
+
+# vLLM の初回起動は重い (モデルロードに 30-60 秒、warmup 含めて 90 秒程度)
+TimeoutStartSec=600
+TimeoutStopSec=60
+
+# elmo として実行 (docker グループ所属が前提)
+User=elmo
+Group=elmo
+
+# HUGGING_FACE_HUB_TOKEN を 600 権限ファイルから読込 (inline 漏洩防止)
+EnvironmentFile=/etc/vllm-qwen-coder.env
+
+# 既存コンテナがあれば事前に掃除 (`-` 接頭で失敗を許容)
+ExecStartPre=-/usr/bin/docker stop vllm-qwen-coder
+ExecStartPre=-/usr/bin/docker rm vllm-qwen-coder
+
+# Phase 7 で HF cache 統一 (AGENT-16) 後は -v を /home/elmo/.cache/huggingface に変更
+ExecStart=/usr/bin/docker run --rm \
+  --name vllm-qwen-coder \
+  --gpus all --ipc=host \
+  -p 8000:8000 \
+  -v /home/elmo/models:/root/.cache/huggingface \
+  -e HUGGING_FACE_HUB_TOKEN \
+  -e HF_HUB_ENABLE_HF_TRANSFER=1 \
+  -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+  vllm/vllm-openai:latest \
+  --model RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic \
+  --max-model-len 4096 \
+  --gpu-memory-utilization 0.88 \
+  --cpu-offload-gb 6 \
+  --enforce-eager \
+  --served-model-name qwen-coder
+
+ExecStop=/usr/bin/docker stop -t 30 vllm-qwen-coder
+
+[Install]
+WantedBy=multi-user.target
