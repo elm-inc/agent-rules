@@ -1,42 +1,65 @@
 ---
 name: test-generate
-description: 対象の関数・モジュールに対するテストケース列挙とテスト実装を生成する。ローカル LLM (Qwen2.5-Coder-32B) を主、DeepSeek-R1 を property-based test の不変条件発想に使う。mutation testing の生存変異を殺すテスト追加モードもあり
-argument-hint: <対象ファイルまたは関数> [--property] [--mutants <生存変異リスト>]
+description: テスト観点の列挙とテスト実装を生成する。--brainstorm で複数 LLM (DeepSeek-R1 + Qwen + 任意で Distill/Gemini) を並列実行して観点を多面化、--implement で観点ファイルからコード生成。引数なしは旧挙動 (列挙 + 実装を 1 ステップで、Qwen 単独)
+argument-hint: <対象> [--brainstorm | --implement <観点ファイル>] [--with-distill] [--with-gemini] [--property] [--mutants <list>]
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Read Write Edit
+allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(flock *) Bash(docker *) Read Write Edit
 ---
 
-# テストケース・実装生成
+# テスト観点列挙 + 実装生成 (多モデル対応)
 
-対象コードに対し、**正常系・境界・異常系を列挙** → **テスト実装を生成** する。プロパティテスト不変条件の発想やミューテーションテスト対策モードも持つ。
+ADR-0002 採択により 2 モード化。**観点抽出** (拡散的タスク) は複数 LLM を並列実行して groupthink を防ぎ、**実装** (収束的タスク) は単一モデル (Qwen) で十分という方針。
 
-## 使い分け
+## モード一覧
 
 | モード | LLM | 用途 |
 |---|---|---|
-| 列挙 + 実装 (デフォルト) | Qwen2.5-Coder-32B (ローカル) | 通常のテスト生成 |
-| `--property` | DeepSeek-R1 (発想) + Qwen (実装) | プロパティテスト不変条件 |
-| `--mutants` | Qwen | 生存ミュータントを殺すテスト追加 |
+| **引数なし** (旧挙動) | Qwen 単独 | 通常のテスト生成 (列挙 + 実装を 1 ステップで)。**後方互換** |
+| **`--brainstorm`** | DeepSeek-R1 (API) + Qwen-32B FP8 (デフォルト 2 モデル)<br>+ `--with-distill` で Distill-14B FP8<br>+ `--with-gemini` で Gemini 2.5 Pro | 観点 (テストケース・境界条件・不変条件) を多面化抽出 |
+| **`--implement <観点ファイル>`** | Qwen 単独 | `--brainstorm` の出力 (`.test-brainstorm.md`) を入力にコード生成 |
+| **`--property`** | DeepSeek-R1 (発想) + Qwen (実装) | プロパティテスト不変条件 (旧挙動と同じ) |
+| **`--mutants <list>`** | Qwen | 生存ミュータントを殺すテスト追加 (旧挙動と同じ) |
 
 ## 前提
 
-- ローカル: vLLM が稼働 (`$LOCAL_LLM_BASE_URL`)
-- `--property` 使用時: `DEEPSEEK_API_KEY` 必須
+- ローカル vLLM (`$LOCAL_LLM_BASE_URL`) が稼働 (常駐 Qwen-Coder-32B FP8)
+- `--brainstorm` デフォルト: `DEEPSEEK_API_KEY` 必須 (Distill ローカル化なら `--with-distill` で代替可)
+- `--with-distill`: vLLM swap で Distill-Qwen-14B online FP8 を一時起動 (Phase 3 で自動化予定)
+- `--with-gemini`: `GEMINI_API_KEY` 必須
 - セットアップ: [`docs/setup/local-llm.md`](../../docs/setup/local-llm.md)
+- Phase 1 結果: [`docs/setup/notes/phase7-distill-eval.md`](../../docs/setup/notes/phase7-distill-eval.md)
+
+## 排他制御 (Critical, ADR-0002 採択時の安全策)
+
+`--brainstorm` は GPU を順次 swap で使う運用。複数 worktree セッションから同時呼び出しで OOM するため、**`flock` で concurrency=1 を強制**:
+
+```bash
+LOCKFILE=/tmp/test-generate-brainstorm.lock
+flock -w 600 "$LOCKFILE" bash -c '
+  # brainstorm 本体処理
+'
+```
+
+`--implement` は Qwen 単独で常駐 vLLM を使うため排他不要 (常時並行 OK)。
 
 ## 引数の解釈
 
-`$ARGUMENTS` を以下のように解釈する:
+`$ARGUMENTS` を以下のように解釈:
 
-1. **最初の引数**: 対象ファイルパス or `path:functionName`
-2. **`--property`** → プロパティテスト不変条件モードを有効化
-3. **`--mutants <path>`** → 生存ミュータントのリストファイルを読み込み対策
+1. **最初の位置引数**: 対象ファイルパス or `path:functionName`
+2. **`--brainstorm`** → 観点抽出モード
+3. **`--implement <観点ファイル>`** → 実装モード (観点ファイル必須)
+4. **`--with-distill`** → Distill-Qwen-14B FP8 をローカルレッドチームに併用
+5. **`--with-gemini`** → Gemini 2.5 Pro を repo 横断 invariant 抽出に併用
+6. **`--property`** → プロパティテスト不変条件モード (旧挙動)
+7. **`--mutants <path>`** → 生存ミュータント対策 (旧挙動)
+
+`--brainstorm` と `--implement` は**相互排他**。両方が指定されたらエラー。
+両方とも未指定なら**旧挙動** (Qwen 単独で列挙 + 実装を 1 ステップで実行)。
 
 ## 実行手順
 
-### 1. テストフレームワーク検出
-
-リポジトリのテストフレームワークを自動検出する (package.json / pyproject.toml / go.mod 等から):
+### Phase A: テストフレームワーク検出 (全モード共通)
 
 ```bash
 # Python
@@ -50,95 +73,145 @@ fi
 [ -f go.mod ] && FRAMEWORK="go test"
 ```
 
-property-based test ライブラリも検出:
-- pytest → `hypothesis`
-- vitest/jest → `fast-check`
-- go → `gopter` or `testing/quick`
+property-based テストライブラリも検出 (pytest→hypothesis / vitest+jest→fast-check / go→gopter)。
 
-### 2. 対象コードの取得 + 既存テストの参照
+### Phase B-1: `--brainstorm` モード
+
+排他ロックを取得した上で、参加モデル (デフォルト DeepSeek-R1 + Qwen の 2、`--with-*` で追加) を順次 swap して観点を集める。
+
+#### B-1-a. 観点抽出プロンプト (各モデル共通)
+
+```
+あなたは熟練のテストエンジニアです。以下のコードについて、テスト観点を**網羅的に列挙**してください。
+重複を恐れず、思いつく限りすべて挙げてください。**実装コードは書かないでください**。
+
+カテゴリ別に箇条書きで:
+- 正常系の典型ケース
+- 境界条件 (最小・最大・空・1 個・オーバーフロー)
+- 異常系 (型違反、値域違反、null/None、空コレクション、循環参照)
+- 並行・副作用 (race、リエントランシー、idempotency)
+- セキュリティ (input validation、injection、auth bypass)
+- パフォーマンス (large input、N+1、再帰深さ)
+- メタモルフィック関係 / 不変条件 (該当する場合)
+
+各観点に致命度 (High/Medium/Low) を付けてください。
+
+対象コード:
+---
+{TARGET_CODE}
+---
+```
+
+#### B-1-b. モデル別実行 (順次 swap)
 
 ```bash
-# 対象関数のソース取得
-cat "$TARGET_FILE"
+BRAINSTORM_TMP=$(mktemp -d)
 
-# 既存の近接テスト (規約理解のため)
-TEST_DIR=$(find . -type d \( -name "tests" -o -name "__tests__" -o -name "test" \) ! -path "*/node_modules/*" | head -3)
-find "$TEST_DIR" -type f | head -5 | xargs -I {} sh -c 'echo "## {}"; cat "{}"'
+# 1. DeepSeek-R1 (API、deepseek-reasoner)
+if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
+  curl -sf https://api.deepseek.com/v1/chat/completions \
+    -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n --arg c "$PROMPT" '{model:"deepseek-reasoner", messages:[{role:"user", content:$c}], max_tokens:6000}')" \
+    | jq -r '.choices[0].message.content' > "$BRAINSTORM_TMP/r1.md"
+fi
+
+# 2. Qwen-Coder-32B FP8 (常駐、:8000)
+curl -sf "${LOCAL_LLM_BASE_URL:-http://localhost:8000/v1}/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg c "$PROMPT" --arg m "${LOCAL_LLM_MODEL:-qwen-coder}" '{model:$m, messages:[{role:"user", content:$c}], temperature:0.3, max_tokens:3000}')" \
+  | jq -r '.choices[0].message.content' > "$BRAINSTORM_TMP/qwen.md"
+
+# 3. (--with-distill) Distill-Qwen-14B FP8 を swap で起動
+if [ "$WITH_DISTILL" = "1" ]; then
+  docker stop vllm-qwen-coder
+  docker run -d --name vllm-test --gpus all --ipc=host -p 8001:8000 \
+    -v "$HOME/.cache/huggingface":/root/.cache/huggingface \
+    -e HUGGING_FACE_HUB_TOKEN="$(cat ~/.hf_token)" \
+    vllm/vllm-openai:latest \
+    --model deepseek-ai/DeepSeek-R1-Distill-Qwen-14B \
+    --quantization fp8 --max-model-len 16384 --gpu-memory-utilization 0.90 \
+    --served-model-name distill --enforce-eager > /dev/null
+
+  # healthcheck (max 5 min)
+  for i in $(seq 1 60); do
+    curl -sf http://localhost:8001/v1/models > /dev/null 2>&1 && break
+    sleep 5
+  done
+
+  # 推論
+  curl -sf http://localhost:8001/v1/chat/completions \
+    -d "$(jq -n --arg c "$PROMPT" '{model:"distill", messages:[{role:"user", content:$c}], temperature:0.3, max_tokens:5000}')" \
+    | jq -r '.choices[0].message.content' > "$BRAINSTORM_TMP/distill.md"
+
+  # cleanup + 常駐復帰
+  docker rm -f vllm-test
+  docker start vllm-qwen-coder
+  for i in $(seq 1 60); do
+    curl -sf http://localhost:8000/v1/models > /dev/null 2>&1 && break
+    sleep 5
+  done
+fi
+
+# 4. (--with-gemini) Gemini 2.5 Pro
+if [ "$WITH_GEMINI" = "1" ]; then
+  curl -sf "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=$GEMINI_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n --arg c "$PROMPT" '{contents:[{parts:[{text:$c}]}], generationConfig:{maxOutputTokens:8192}}')" \
+    | jq -r '.candidates[0].content.parts[0].text' > "$BRAINSTORM_TMP/gemini.md"
+fi
 ```
 
-### 3-A. 通常モード: テストケース列挙
+#### B-1-c. 観点マージ + 重複除去
 
-ローカル LLM (Qwen) でケースを列挙:
+各モデルの出力を 1 つの `.test-brainstorm.md` に集約:
 
-```
-あなたは熟練のテストエンジニアです。以下のコードに対して、テストケースを **網羅的に列挙** してください。
+```bash
+TARGET_BASE=$(basename "$TARGET" | sed 's/\.[^.]*$//')
+OUT="$(dirname "$TARGET")/${TARGET_BASE}.test-brainstorm.md"
 
-カテゴリごとに表形式で出力してください:
-| カテゴリ | 入力 | 期待 | 重要度 |
-|---|---|---|---|
-| 正常系 (典型) | ... | ... | High |
-| 正常系 (空) | ... | ... | High |
-| 境界 (最小/最大) | ... | ... | High |
-| 異常系 (型) | ... | ... | Medium |
-| 異常系 (値域) | ... | ... | Medium |
-| 並行 / 副作用 | ... | ... | High |
+cat > "$OUT" <<EOF
+# テスト観点: $TARGET
 
-テストフレームワーク: {FRAMEWORK}
-既存テストの規約 (参考): {EXISTING_TESTS_SNIPPET}
+由来モデル別の生発想を保持しつつ、最下部にマージ済みリストを示します。
 
----
-{TARGET_CODE}
----
-```
+## DeepSeek-R1 (API) が挙げた観点
+$([ -f "$BRAINSTORM_TMP/r1.md" ] && cat "$BRAINSTORM_TMP/r1.md" || echo "(skipped)")
 
-### 3-B. `--property` モード: 不変条件発想
+## Qwen-Coder-32B が挙げた観点
+$([ -f "$BRAINSTORM_TMP/qwen.md" ] && cat "$BRAINSTORM_TMP/qwen.md" || echo "(skipped)")
 
-DeepSeek-R1 でプロパティテストの不変条件を発想:
+$([ "$WITH_DISTILL" = "1" ] && echo "## DeepSeek-R1-Distill-Qwen-14B (local FP8) が挙げた観点" && cat "$BRAINSTORM_TMP/distill.md")
 
-```
-あなたはプロパティベーステストに精通したエンジニアです。
-以下のコードの **不変条件 (invariants)** と **メタモルフィック関係 (metamorphic relations)** を列挙してください。
+$([ "$WITH_GEMINI" = "1" ] && echo "## Gemini 2.5 Pro が挙げた観点" && cat "$BRAINSTORM_TMP/gemini.md")
 
-例:
-- ソート関数 → 出力は入力の置換 / 出力は単調 / 冪等性
-- 逆関数の存在 (encode/decode, parse/format)
-- 結合律 / 交換律 / 単位元
-- 入力サイズに対する単調性
+## マージ済み観点リスト
 
-各不変条件について、{FRAMEWORK} で書く際の生成戦略 (どんな input generator を使うか) も提案してください。
+- [P0] (致命度 High かつ複数モデルで一致)
+- [P1] (High かつ単一モデルのみ、または Medium かつ複数モデル一致)
+- [P2] (それ以外)
 
----
-{TARGET_CODE}
----
+## カバレッジ評価
+- 全モデル共通の観点: N 件 (高信頼)
+- 単一モデルのみの観点: N 件 (要レビュー — 偶然 or 独自発見)
+EOF
 ```
 
-### 3-C. `--mutants` モード: ミュータント対策
+最終的に Claude が「マージ済み観点リスト」セクションを埋める (手動マージ、観点数 200 件超なら警告 + トップ N に絞る)。
 
-生存ミュータントのリストを Qwen に渡してテスト追加:
+**注意 (ADR-0002 採択時の安全策)**: 観点ファイルは内部設計や脆弱性発想が含まれるため、デフォルトで **`.gitignore` 対象推奨** (`*.test-brainstorm.md`)。リポジトリ運用ポリシー次第で明示的にコミット。
 
-```
-以下は mutation testing で **生き残った変異 (テストで検出できなかったもの)** のリストです。
-各変異を **殺す (テストで失敗させる)** ためのテストケースを生成してください。
+### Phase B-2: `--implement <観点ファイル>` モード
 
----
-変異リスト:
-{MUTANTS}
----
-対象コード:
-{TARGET_CODE}
----
-```
-
-### 4. テスト実装の生成
-
-列挙結果を Qwen に渡して **実装** させる:
+排他不要 (Qwen 単独で常駐 vLLM を使用)。観点ファイル → ケース列挙 → コード生成:
 
 ```
-以下のテストケース列挙に基づき、{FRAMEWORK} 形式でテスト実装を書いてください。
+以下の観点リストに従って、{FRAMEWORK} 形式でテスト実装を書いてください。
 既存テストの規約 (import, setup, naming) に従ってください。
+**観点に含まれないものは追加しないでください** (人間が選別した重要観点のみ実装する)。
 
-ケース列挙:
-{ENUMERATION}
+観点ファイル:
+{BRAINSTORM_MD}
 
 既存テスト規約:
 {EXISTING_TESTS_SNIPPET}
@@ -147,96 +220,85 @@ DeepSeek-R1 でプロパティテストの不変条件を発想:
 {TARGET_CODE}
 ```
 
-### 5. 出力とユーザー確認
+Qwen-Coder-32B (常駐 vLLM) で実装生成。
 
-- 列挙結果と実装を表示
-- ユーザーに **保存先パス** を確認 (既存テスト隣 or 新規)
-- 承認後、Write/Edit で保存
+### Phase B-3: 旧挙動 (引数なし、後方互換)
 
-### 6. 生成テストの実行検証 (Phase 5 追加)
+`--brainstorm` も `--implement` も `--property` も `--mutants` も無い場合、旧来の単一ステップ動作 (Qwen 単独で列挙 + 実装を 1 ステップ)。詳細プロンプトは [`SKILL.legacy.md`](SKILL.legacy.md) と同等。
 
-> **重要 (Phase 4 で判明)**: AI 生成 assertion は実コードと **一致しないことがある** (例: 期待 `"1分"` だが実装は `"1分0秒"`)。必ず実行して赤緑確認する。
+### Phase B-4: `--property` モード (旧挙動を維持)
+
+DeepSeek-R1 で不変条件 (invariants / metamorphic relations) を発想 → Qwen で実装。詳細は SKILL.legacy.md の同セクション。
+
+### Phase B-5: `--mutants <list>` モード (旧挙動を維持)
+
+生存ミュータントリスト + 対象コードを Qwen に渡してテスト追加。詳細は SKILL.legacy.md の同セクション。
+
+### Phase C: テスト実行検証 (実装系モード共通)
+
+> **Phase 4 で判明**: AI 生成 assertion は実コードと**一致しないことがある**。必ず実行して赤緑確認:
 
 ```bash
-# 1. テストをまず実行
 pytest "$NEW_TEST_PATH" -v 2>&1 | tee /tmp/test-result.txt
-
-# 2. 全部緑なら完了
-if [ $? -eq 0 ]; then
-  echo "✓ 全テスト pass"
-  exit 0
+if [ $? -ne 0 ]; then
+  echo "失敗あり。実装 vs assertion のどちらが正しいかを判断:"
+  grep -E "FAILED|AssertionError" /tmp/test-result.txt
 fi
-
-# 3. 赤テストがある場合、Claude に判断を仰ぐ:
-#    - 実装側のバグ → 実装を直す
-#    - assertion 側の誤り (AI の期待値間違い) → assertion を直す
-#    - どちらか不明 → ユーザーに確認
-echo "✗ 失敗テスト発見。実装 vs assertion のどちらが正しいか判断する:"
-grep -E "FAILED|AssertionError" /tmp/test-result.txt
 ```
 
-## Qwen context 制約への対処 (Phase 5 追加)
+## Qwen context 制約への対処
 
-> **Phase 4 で判明**: vLLM の `--max-model-len 4096` 制約下で、入力 + 出力 > 4096 だと `VLLMValidationError`。
-
-`max_tokens` を **動的に決定** する:
+vLLM `--max-model-len 4096` (現状) 制約下では `max_tokens` を動的に決定:
 
 ```bash
-# vLLM の context 上限を取得
 MAX_LEN=$(curl -s "${LOCAL_LLM_BASE_URL}/models" | jq -r '.data[0].max_model_len // 4096')
-
-# 入力 token を推定 (粗く 4 chars/token)
 INPUT_TOK=$(( ${#PROMPT} / 4 ))
-
-# 安全マージン 100 を引いて出力 token 上限を決定
 MAX_OUT=$(( MAX_LEN - INPUT_TOK - 100 ))
-[ "$MAX_OUT" -lt 500 ] && MAX_OUT=500  # 最低 500 は確保
+[ "$MAX_OUT" -lt 500 ] && MAX_OUT=500
 ```
 
-## API 呼び出し詳細
-
-### Qwen (vLLM)
-
-```bash
-PAYLOAD=$(jq -n --arg model "${LOCAL_LLM_MODEL:-qwen-coder}" --arg content "$PROMPT" \
-  '{model:$model, messages:[{role:"user", content:$content}], temperature:0.3, max_tokens:8192}')
-
-curl -sf "${LOCAL_LLM_BASE_URL:-http://localhost:8000/v1}/chat/completions" \
-  -H "Content-Type: application/json" -d "$PAYLOAD" \
-  | jq -r '.choices[0].message.content'
-```
-
-### DeepSeek-R1
-
-```bash
-PAYLOAD=$(jq -n --arg content "$PROMPT" \
-  '{model:"deepseek-reasoner", messages:[{role:"user", content:$content}], max_tokens:8192}')
-
-curl -sf https://api.deepseek.com/v1/chat/completions \
-  -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-  -H "Content-Type: application/json" -d "$PAYLOAD" \
-  | jq -r '.choices[0].message.content'
-```
+Phase 3 で `--max-model-len 8192` 以上に拡張予定。
 
 ## コマンド例
 
 ```bash
-# 関数指定で通常テスト生成
+# 旧挙動 (後方互換)
 /test-generate src/utils/date.ts:formatDuration
 
-# ファイル全体
-/test-generate src/payment/processor.py
+# 観点抽出 (DeepSeek-R1 + Qwen の 2 モデル並列、デフォルト)
+/test-generate src/payment/processor.py --brainstorm
 
-# プロパティテスト
+# 観点抽出 (Distill ローカル追加 = 機密案件用 3 モデル並列)
+/test-generate src/payment/processor.py --brainstorm --with-distill
+
+# 観点抽出 (Gemini で repo 横断 invariant 追加、コスト注意)
+/test-generate src/payment/processor.py --brainstorm --with-gemini
+
+# 観点ファイルから実装
+/test-generate src/payment/processor.py --implement src/payment/processor.test-brainstorm.md
+
+# プロパティテスト (旧挙動)
 /test-generate src/algo/sort.ts --property
 
-# ミュータント対策
+# ミュータント対策 (旧挙動)
 /test-generate src/auth/token.py --mutants reports/mutants-survived.txt
 ```
 
 ## 注意事項
 
-- 生成テストは **必ず人間 (or Claude) がレビュー** すること。AI 生成テストは表面的になりがち
-- mutation test 連携は `mutmut` (Python) / `Stryker` (JS/TS) を別途セットアップ前提
-- プロパティテストは初回学習コストが高い。導入は段階的に
-- 生成された assertion がコードと同じ誤解をしていないか注意 (tautology 回避)
+- `--brainstorm` は GPU swap で 1.5-3 分のレイテンシ追加 (`--with-distill` 時)。バッチ向き
+- 同時実行は flock で 1 に制限される。並列ジョブ要求は順次待機
+- 観点ファイルが 200 件超なら警告 + トップ N に絞る案内
+- `--with-gemini` は **1M context 使用で $0.5-1/回**、月 10-20 回想定で $5-20。opt-in 推奨
+- 生成テストは **必ず人間 (or Claude) がレビュー**。AI 生成テストは表面的になりがち
+- 旧版動作 (SKILL.legacy.md) は引数なし呼び出しで再現可能。ロールバック手段として保持
+
+## ロールバック
+
+問題が発生した場合:
+
+```bash
+cp skills/test-generate/SKILL.legacy.md skills/test-generate/SKILL.md
+```
+
+または agent-rules リポで該当 commit を revert。
