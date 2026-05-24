@@ -1,10 +1,11 @@
 # テスト工程の多モデル化 + ローカル量子化モデル併用 設計
 
-- ADR: [0002-multi-model-test-generation](../adr/0002-multi-model-test-generation.md)
+- ADR: [0002-multi-model-test-generation](../adr/0002-multi-model-test-generation.md) **(採択 2026-05-24)**
 - Linear Project: [テスト工程の多モデル化 + ローカル量子化モデル併用](https://linear.app/elm-inc/project/テスト工程の多モデル化-ローカル量子化モデル併用-e3e9282c4778)
-- Phases: [AGENT-10](https://linear.app/elm-inc/issue/AGENT-10) / [AGENT-11](https://linear.app/elm-inc/issue/AGENT-11) / [AGENT-12](https://linear.app/elm-inc/issue/AGENT-12) / [AGENT-13](https://linear.app/elm-inc/issue/AGENT-13)
+- Phases: [AGENT-10 ✅](https://linear.app/elm-inc/issue/AGENT-10) / [AGENT-11](https://linear.app/elm-inc/issue/AGENT-11) / [AGENT-12](https://linear.app/elm-inc/issue/AGENT-12) / [AGENT-13](https://linear.app/elm-inc/issue/AGENT-13)
 - 制定日: 2026-05-24
-- 状態: **設計フェーズ (実装未着手)**
+- 状態: **Phase 1 完了 (AGENT-10 ✅)、Phase 2 着手待ち**
+- Phase 1 実測結果: [docs/setup/notes/phase7-distill-eval.md](../setup/notes/phase7-distill-eval.md)
 
 ## 1. 背景・目的
 
@@ -96,20 +97,19 @@ VRAM は**モデル重量だけでなく、KV cache (コンテキスト長次第
 | レッドチーム (新規) | DeepSeek-R1-Distill-Qwen-14B | AWQ INT4 | 6.2-7.5GB | **~9-12GB** | API R1 のローカル代替候補 |
 | (代替案 E 採用時) 実装・コード生成 | Qwen2.5-Coder-32B | AWQ INT4 | ~16GB | **~19-22GB** | INT4 化で 3 モデル同時ロード可能化 |
 
-### 5.2 ロード戦略 (3 案、Phase 1 ベンチマークで選定)
+### 5.2 ロード戦略: **A 案 (swap 方式) で採択** (Phase 1 実測で確定)
 
-当初想定した「32B FP8 + 14B INT4 × 2 同時ロード = 33GB」は KV cache と overhead を含めると **実 36-42GB 必要で 32GB に絶対収まらない** (DeepSeek-R1 redteam 指摘)。以下 3 案を Phase 1 で実測比較する:
+| 案 | 構成 | 実 VRAM | 判定 |
+|---|---|---|---|
+| **A. swap 方式 ✅** | 32B FP8 常駐、14B 系は要求時 swap | ~30GB (現状維持) | **採択** |
+| B. 32B INT4 + 14B × 2 同時 (代替案 E) | 全モデル INT4 化 + 同時ロード | 同時ロード不可 (VRAM 不足) + 32B INT4 で品質 -20% | **不採用** |
+| C. 14B 1 種のみ追加 | 32B FP8 常駐 + 14B INT4 × 1 同時 | 同時ロード不可 (32GB 超過) | **不採用** |
 
-| 案 | 構成 | 実 VRAM | 長所 | 短所 |
-|---|---|---|---|---|
-| **A. swap 方式 (最も保守的)** | 32B FP8 常駐、14B 系は要求時 swap | ~26-30GB | 既存運用に追加少、品質維持 | 14B ロードに 10-15秒、`--brainstorm` レイテンシ増 |
-| **B. 32B INT4 + 14B × 2 同時 (代替案 E)** | 全モデル INT4 化 + 同時ロード | ~27-34GB | 同時ロード成立、`--brainstorm` 高速 | 32B コード生成品質劣化リスク (要計測) |
-| **C. 14B 1 種のみ追加** | 32B FP8 常駐 + 14B INT4 × 1 (distill or coder) | ~33-38GB ★ | 部分的多モデル化、設定簡単 | ★ KV cache 次第で OOM 余地、要 max-model-len 削減 |
-
-**選定基準** (Phase 1 終了時):
-- **品質第一**: A 案 (swap, FP8 維持)
-- **品質許容範囲なら速度優先**: B 案 (代替案 E, 全 INT4 化)
-- 「Qwen-Coder-32B INT4 のバグ検出率が FP8 比 -5% 以内」を満たせば B 案採用
+**確定構成**:
+- 常駐: Qwen-Coder-32B FP8 (現状の `vllm-qwen-coder`)
+- swap 候補: Qwen-Coder-14B AWQ INT4 / DeepSeek-R1-Distill-Qwen-14B (online FP8)
+- swap 時間: 30-60 秒/モデル、`--brainstorm` の 3 モデル順次なら 1.5-3 分のレイテンシ追加
+- 詳細: [phase7-distill-eval.md](../setup/notes/phase7-distill-eval.md#phase-1c-ロード戦略採択-2026-05-24)
 
 ### 5.3 並列実行の排他制御 (必須)
 
