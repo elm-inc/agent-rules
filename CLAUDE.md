@@ -15,7 +15,8 @@
 | セカンドオピニオン (異種ベンダー) | Codex (GPT-5) | `/codex-review`, `/codex-task`, `/codex-audit` |
 | 設計レッドチーム (思考連鎖) | DeepSeek-R1 (API) | `/deepseek-redteam` |
 | リポ横断 (1M context) | Gemini 2.5 Pro (API) | `/gemini-review` |
-| テスト生成 | Qwen (主) + DeepSeek-R1 (property 発想) | `/test-generate` |
+| テスト観点抽出 (新) | DeepSeek-R1 + Qwen (デフォルト 2 並列)、+任意で Distill/Gemini | `/test-generate --brainstorm` |
+| テスト実装 | Qwen-Coder-32B FP8 (主) | `/test-generate --implement` または引数なし旧挙動 |
 | テストデータ生成 | Qwen (バッチ推論) | `/test-data` |
 | 機械検証 | pre-commit hooks (ruff/mypy/semgrep/type-check) | (各リポで設定) |
 
@@ -29,7 +30,7 @@
 | `/codex-task` | Codex に修正・実装を委譲 | `/codex-task エラーハンドリングを追加` |
 | `/deepseek-redteam` | 設計・差分の盲点炙り出し | `/deepseek-redteam --design docs/design/foo.md` |
 | `/gemini-review` | リポ横断・ADR 整合性レビュー (1M context) | `/gemini-review --scope apps/web` |
-| `/test-generate` | テストケース列挙 + 実装生成 | `/test-generate src/utils/date.ts:format` |
+| `/test-generate` | テストケース列挙 + 実装生成 (2 モード対応、ADR-0002) | `/test-generate src/utils/date.ts:format`, `/test-generate ... --brainstorm`, `/test-generate ... --implement <観点ファイル>` |
 | `/test-data` | 業務的に妥当なテストデータ生成 | `/test-data app/models/user.py:User --count 50` |
 
 ### コミット時のフロー (推奨)
@@ -68,8 +69,9 @@
 - **Gemini の応答が空** → [`skills/gemini-review/SKILL.md`](skills/gemini-review/SKILL.md) (thinking モードで枯渇、`maxOutputTokens ≥ 8192`)
 - **API キー管理** → [`scripts/env-snippet.sh`](scripts/env-snippet.sh) (`~/.*_token` ファイル方式)
 - **HF DL がストール** → [`docs/setup/notes/phase2-trial.md`](docs/setup/notes/phase2-trial.md) (`HF_TOKEN` + `HF_HUB_ENABLE_HF_TRANSFER=1`)
-- **設計判断の根拠** → [`docs/adr/0001-multi-llm-development-workflow.md`](docs/adr/0001-multi-llm-development-workflow.md)
+- **設計判断の根拠** → [`docs/adr/0001-multi-llm-development-workflow.md`](docs/adr/0001-multi-llm-development-workflow.md), [`docs/adr/0002-multi-model-test-generation.md`](docs/adr/0002-multi-model-test-generation.md)
 - **月次 ROI 更新** → [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) §8 + [`scripts/track-cost.sh`](scripts/track-cost.sh)
+- **Phase 7 (Distill / 量子化評価)** → [`docs/setup/notes/phase7-distill-eval.md`](docs/setup/notes/phase7-distill-eval.md), [`scripts/vllm-swap-to.sh`](scripts/vllm-swap-to.sh)
 
 ## 並列開発 (git worktree)
 タスクごとに git worktree を分離し、複数の Claude Code セッションで安全に並列開発する。

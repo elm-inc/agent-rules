@@ -10,15 +10,17 @@
 
 他の GPU でも動くが、量子化設定 (FP8 / Q5_K_M) を VRAM に合わせて調整する。
 
-## 採用モデル
+## 採用モデル (ADR-0002 採択後)
 
-| 用途 | モデル | 量子化 | VRAM 使用量 |
-|---|---|---|---|
-| 主力 (レビュー、テスト生成) | `Qwen/Qwen2.5-Coder-32B-Instruct` | FP8 | 〜23GB |
-| 高速ループ (commit msg, format hint) | `Qwen/Qwen2.5-Coder-7B-Instruct` | FP8 | 〜8GB |
-| 任意 (Mistral 系比較) | `mistralai/Codestral-22B-v0.1` | Q5_K_M (GGUF) | 〜16GB |
+| 用途 | モデル | 量子化 | 重量 | **実 VRAM (KV cache + overhead 込み)** |
+|---|---|---|---|---|
+| **常駐 (主力: コードレビュー、実装、テスト)** | `RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic` | FP8 | 18.14 GiB | ~28-30 GiB |
+| swap 1 (高速ループ・観点抽出補助) | `Qwen/Qwen2.5-Coder-14B-Instruct-AWQ` | AWQ INT4 | 9.38 GiB | ~17.5 GiB |
+| swap 2 (機密案件レッドチーム) | `deepseek-ai/DeepSeek-R1-Distill-Qwen-14B` | online FP8 | 15.5 GiB | ~28.5 GiB |
 
-**主力モデルだけ常駐**させ、7B は必要時に swap する運用を想定。
+**重要**: 32GB VRAM では同時ロード不可 (Phase 1 ベンチで確定)。**A 案 (swap 方式) で運用**: 主力を常駐、swap 候補は要求時に `scripts/vllm-swap-to.sh` で一時起動 → 終了時に主力復帰。
+
+Phase 1 実測詳細: [docs/setup/notes/phase7-distill-eval.md](notes/phase7-distill-eval.md)
 
 ## ランタイム: vLLM (FP8)
 
@@ -88,25 +90,61 @@ llm -m openai/qwen-coder \
 
 または curl で直接 `$LOCAL_LLM_BASE_URL/chat/completions` を叩く。
 
-## モデル swap (7B ↔ 32B)
+## モデル swap (ADR-0002 採択フロー)
 
-VRAM が足りなくなった場合、7B に切り替える:
+ADR-0002 採択により、常駐 (Qwen-Coder-32B FP8) はそのまま、swap 用に Distill / 14B INT4 を必要時に起動するヘルパースクリプトを使う。
+
+### 自動 swap (推奨)
 
 ```bash
-docker stop vllm-qwen-coder && docker rm vllm-qwen-coder
+# Distill-Qwen-14B FP8 を :8001 で起動 (機密案件レッドチーム)
+bash scripts/vllm-swap-to.sh distill
 
-docker run -d --restart unless-stopped \
-  --name vllm-qwen-coder \
-  --gpus all --ipc=host -p 8000:8000 \
-  -v ~/models:/root/.cache/huggingface \
-  vllm/vllm-openai:latest \
-  --model Qwen/Qwen2.5-Coder-7B-Instruct \
-  --quantization fp8 \
-  --max-model-len 32768 \
-  --served-model-name qwen-coder
+# Qwen-Coder-14B AWQ INT4 を :8001 で起動 (高速ループ)
+bash scripts/vllm-swap-to.sh coder-14b
+
+# 状態確認
+bash scripts/vllm-swap-to.sh status
+
+# swap 終了 → 主力復帰
+bash scripts/vllm-swap-to.sh restore
 ```
 
-スキル側はモデル名 `qwen-coder` で抽象化されているため変更不要。
+`scripts/vllm-swap-to.sh` は内部で:
+1. 主力 `vllm-qwen-coder` を docker stop
+2. 引数モデルを :8001 で docker run (`--name vllm-swap`)
+3. /v1/models で healthcheck (最大 6 分待機)
+4. ユーザーに利用例を表示
+
+`restore` で逆順 (swap 停止 → 主力 docker start)。swap 時間: 30-60 秒 / モデル。
+
+### 健全性監視
+
+```bash
+# 単発チェック
+bash scripts/vllm-healthcheck.sh
+
+# cron で 5 分おき (異常時 NTFY_TOPIC に通知)
+*/5 * * * * NTFY_TOPIC=elmo-claude-XXXX /path/to/scripts/vllm-healthcheck.sh
+```
+
+### サプライチェーン対策 (モデル改ざん検証)
+
+ADR-0002 採択時の発見 (DeepSeek-R1 redteam High 指摘) への対応:
+
+```bash
+bash scripts/vllm-verify-model.sh Qwen/Qwen2.5-Coder-14B-Instruct-AWQ
+bash scripts/vllm-verify-model.sh deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
+```
+
+HF Hub の API から取得した safetensors SHA256 をローカルファイルと照合する。
+publisher allowlist: `Qwen / deepseek-ai / RedHatAI / mistralai / google / meta-llama`。それ以外は明示的に拒否。
+
+### HF cache の場所 (Phase 7 で判明)
+
+- 既存 (現状): `~/models/hub/` (docker volume 経由で root 所有、elmo から書けない)
+- **新規 DL 推奨先**: `~/.cache/huggingface/hub/` (elmo 所有、`hf download` で直接使える)
+- Phase 7 で `~/.cache/huggingface/hub/` に統一移行予定 (現状は 2 箇所に分散)。env-snippet.sh では `HF_HUB_CACHE` を後者に向けている。
 
 ## トラブルシューティング
 
