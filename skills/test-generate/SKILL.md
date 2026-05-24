@@ -199,6 +199,18 @@ EOF
 
 最終的に Claude が「マージ済み観点リスト」セクションを埋める (手動マージ、観点数 200 件超なら警告 + トップ N に絞る)。
 
+#### B-1-d. disagreement 自動検出 (AGENT-19)
+
+マージ前に `scripts/brainstorm-divergence.py` を実行して、**他モデルと類似度の低い観点 (= 単独モデルだけが拾った重要候補)** をファイル末尾に追記する:
+
+```bash
+python3 "$AGENT_RULES/scripts/brainstorm-divergence.py" "$OUT" --inplace --threshold 0.30
+```
+
+これにより `## DIVERGENT POINTS` セクションが自動付与される。Claude はこのセクションを優先的にレビューし、マージ済み観点リストの [P0]/[P1] に昇格させる判断材料とする。Phase 8 試運転では DeepSeek-R1 観点 49 (実装と docstring の不一致) がここに flag された実例あり。
+
+threshold チューニング: char n-gram TF-IDF のため日本語短文は類似度が低めに出る傾向。**0.30 推奨 (recall 重視)**、ノイズが多すぎる場合のみ 0.20 に下げる。
+
 **注意 (ADR-0002 採択時の安全策)**: 観点ファイルは内部設計や脆弱性発想が含まれるため、デフォルトで **`.gitignore` 対象推奨** (`*.test-brainstorm.md`)。リポジトリ運用ポリシー次第で明示的にコミット。
 
 ### Phase B-2: `--implement <観点ファイル>` モード
