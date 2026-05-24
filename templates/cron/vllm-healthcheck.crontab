@@ -1,0 +1,13 @@
+# vLLM healthcheck cron template (AGENT-15)
+# Install: crontab -l 2>/dev/null | cat - templates/cron/vllm-healthcheck.crontab | crontab -
+#
+# 環境変数:
+#   NTFY_TOPIC = ntfy.sh のプライベートトピック名 (推測されない長文字列)
+#     例: export NTFY_TOPIC="elmo-vllm-9k3m2p7q5x8c"
+#     iPhone アプリ (ntfy) で同名トピックを subscribe しておく
+#   WEBHOOK_URL = (任意) Slack/Discord 等の Incoming Webhook URL
+#
+# 詳細: docs/setup/notifications.md
+
+# 5 分おきに vLLM の /v1/models をチェック、ダウン時のみ通知
+*/5 * * * * NTFY_TOPIC=elmo-vllm-CHANGEME /home/elmo/repos/github.com/elm-inc/agent-rules/scripts/vllm-healthcheck.sh

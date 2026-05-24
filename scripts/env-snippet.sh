@@ -27,3 +27,8 @@ export HF_HUB_CACHE="$HOME/.cache/huggingface/hub"
 # --- クラウド LLM API (Phase 3) ---
 [ -f ~/.gemini_token ]   && export GEMINI_API_KEY="$(cat ~/.gemini_token)"
 [ -f ~/.deepseek_token ] && export DEEPSEEK_API_KEY="$(cat ~/.deepseek_token)"
+
+# --- 通知経路 (AGENT-15 / docs/setup/notifications.md) ---
+# vLLM healthcheck の push 先 ntfy.sh トピック。
+# `echo "elmo-vllm-XXXXXX" > ~/.ntfy_topic && chmod 600 ~/.ntfy_topic` で設定。
+[ -f ~/.ntfy_topic ] && export NTFY_TOPIC="$(cat ~/.ntfy_topic)"
