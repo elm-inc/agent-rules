@@ -20,8 +20,10 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 | セカンドオピニオン | Codex (GPT-5) | `/codex-review` 他 | Anthropic と別ベンダー、修正提案が具体的 |
 | 設計レッドチーム | DeepSeek-R1 (API) | `/deepseek-redteam` | 思考連鎖で深い問題発見、$0.007/回 と激安 |
 | リポ横断 | Gemini 2.5 Pro (1M context) | `/gemini-review` | cross-file 視点で唯一無二の指摘 |
-| テスト生成 | Qwen (主) + R1 (property) | `/test-generate` | 大量生成にローカル、不変条件発想にクラウド |
+| テスト観点抽出 (新 ADR-0002) | DeepSeek-R1 + Qwen (+ 任意で Distill/Gemini) | `/test-generate --brainstorm` | 拡散的タスク、多モデル並列で観点カバレッジ向上 |
+| テスト実装 | Qwen-Coder-32B FP8 | `/test-generate --implement` または引数なし | 収束的、単一モデルで十分 |
 | テストデータ | Qwen (バッチ) | `/test-data` | 関係制約推論 + コスト 0 で大量生成 |
+| **テスト品質検証 (新)** | mutmut / Stryker | `/mutation-check` (AGENT-18) | AI 生成テストの tautology を機械検出、生存変異率で精度可視化 |
 | 機械検証 | pre-commit hooks | (各リポで設定) | AI と独立した第 3 層 |
 
 ## 3. 運用フロー (実績ベース)
