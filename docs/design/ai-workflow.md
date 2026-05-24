@@ -133,10 +133,12 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 
 ### 月別使用頻度
 
-| 月 | `/local-review` | `/codex-review` | `/deepseek-redteam` | `/gemini-review` | `/test-generate` | `/test-data` |
-|---|---|---|---|---|---|---|
-| 2026-05 (本月、暫定) | — | — | — | — | — | — |
-| 2026-06 | TBD | TBD | TBD | TBD | TBD | TBD |
+| 月 | `/local-review` | `/codex-review` | `/deepseek-redteam` | `/gemini-review` | `/test-generate` | `/test-generate --brainstorm` ★ | `/test-data` |
+|---|---|---|---|---|---|---|---|
+| 2026-05 (本月、暫定) | — | — | — | — | — | 1 (Phase 8 試運転) | — |
+| 2026-06 | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+
+★ ADR-0002 採択 (2026-05-24) で追加された新モード。詳細: [phase8-brainstorm-trial.md](../setup/notes/phase8-brainstorm-trial.md)
 
 ### 月別コスト集計
 
