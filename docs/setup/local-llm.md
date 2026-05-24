@@ -175,11 +175,36 @@ journalctl -u vllm-qwen-coder -f
 - `/etc/vllm-qwen-coder.env` が `-rw-------` であること (`ls -la /etc/vllm-qwen-coder.env`)
 - ブート再起動後も自動で立ち上がること (`sudo reboot` で確認、ただし計画停止時のみ)
 
-### HF cache の場所 (Phase 7 で判明)
+### HF cache の場所 (Phase 7 で判明 → AGENT-16 で移行)
 
 - 既存 (現状): `~/models/hub/` (docker volume 経由で root 所有、elmo から書けない)
 - **新規 DL 推奨先**: `~/.cache/huggingface/hub/` (elmo 所有、`hf download` で直接使える)
-- Phase 7 で `~/.cache/huggingface/hub/` に統一移行予定 (現状は 2 箇所に分散)。env-snippet.sh では `HF_HUB_CACHE` を後者に向けている。
+- env-snippet.sh では `HF_HUB_CACHE` を後者に向けている
+
+#### AGENT-16 移行手順 (手動実行)
+
+```bash
+# 約 30-60 分のダウンタイム。sudo パスワードが 2 回必要 (chown と mv)。
+bash ~/repos/github.com/elm-inc/agent-rules/scripts/migrate-hf-cache.sh
+```
+
+スクリプトの動作:
+1. 確認プロンプトを表示 (`yes` で続行)
+2. `vllm-qwen-coder` 停止 → 削除
+3. `rsync -a --ignore-existing` で旧 → 新 cache へコピー (既存 elmo 所有領域は保護)
+4. `sudo chown -R elmo:elmo ~/.cache/huggingface/hub` で root 所有を解消
+5. `sudo mv ~/models ~/models.legacy.YYYYMMDD-HHMMSS` で旧 cache を保全 (削除しない)
+6. 新 volume mount で `vllm-qwen-coder` を再作成
+7. `/v1/models` を polling、最大 5 分で healthy 確認
+
+移行後の確認:
+- `hf download <model>` で `~/.cache/huggingface/hub/` 配下に直接 DL できること
+- `/local-review` を 1 回実行して vLLM 動作確認
+- `~/models.legacy.*` を 1 ヶ月程度保持して問題なければ `sudo rm -rf` で削除
+
+AGENT-14 (systemd unit) を install 済みなら、unit ファイルの `-v` 行は既に
+`/home/elmo/.cache/huggingface` を指している (テンプレ修正済み)。`sudo systemctl
+restart vllm-qwen-coder` で systemd 経由で再起動できる。
 
 ## トラブルシューティング
 
