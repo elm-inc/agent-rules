@@ -202,9 +202,14 @@ bash ~/repos/github.com/elm-inc/agent-rules/scripts/migrate-hf-cache.sh
 - `/local-review` を 1 回実行して vLLM 動作確認
 - `~/models.legacy.*` を 1 ヶ月程度保持して問題なければ `sudo rm -rf` で削除
 
-AGENT-14 (systemd unit) を install 済みなら、unit ファイルの `-v` 行は既に
-`/home/elmo/.cache/huggingface` を指している (テンプレ修正済み)。`sudo systemctl
-restart vllm-qwen-coder` で systemd 経由で再起動できる。
+AGENT-14 (systemd unit) を **install 済みなら**、unit ファイル
+(`/etc/systemd/system/vllm-qwen-coder.service`) の `ExecStart` 行の
+`-v /home/elmo/models` を `-v /home/elmo/.cache/huggingface` に書き換えてから
+`sudo systemctl daemon-reload && sudo systemctl restart vllm-qwen-coder` を実行。
+
+(`templates/systemd/vllm-qwen-coder.service` の `-v` 行は AGENT-16 移行**前**を
+前提に旧パスのまま。AGENT-16 完了後に systemd unit を入れる場合はテンプレを
+sed で `s|/home/elmo/models|/home/elmo/.cache/huggingface|` した上で配置する。)
 
 ## トラブルシューティング
 
