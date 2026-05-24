@@ -1,6 +1,8 @@
 # テスト工程の多モデル化 + ローカル量子化モデル併用 設計
 
 - ADR: [0002-multi-model-test-generation](../adr/0002-multi-model-test-generation.md)
+- Linear Project: [テスト工程の多モデル化 + ローカル量子化モデル併用](https://linear.app/elm-inc/project/テスト工程の多モデル化-ローカル量子化モデル併用-e3e9282c4778)
+- Phases: [AGENT-10](https://linear.app/elm-inc/issue/AGENT-10) / [AGENT-11](https://linear.app/elm-inc/issue/AGENT-11) / [AGENT-12](https://linear.app/elm-inc/issue/AGENT-12) / [AGENT-13](https://linear.app/elm-inc/issue/AGENT-13)
 - 制定日: 2026-05-24
 - 状態: **設計フェーズ (実装未着手)**
 
