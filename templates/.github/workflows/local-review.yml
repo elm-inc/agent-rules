@@ -1,0 +1,129 @@
+# /local-review を PR opened/synchronize で自動実行する GitHub Actions ワークフロー
+# AGENT-17 (agent-rules) で確立。
+#
+# 前提:
+#   - self-hosted runner が elmo machine 上で起動済 (label: vllm)
+#   - 同 machine で vLLM (Qwen-Coder-32B FP8) が http://localhost:8000 で稼働
+#
+# このファイルを利用側リポにコピー:
+#   cp ~/repos/github.com/elm-inc/agent-rules/templates/.github/workflows/local-review.yml \
+#      .github/workflows/
+#
+# セットアップ詳細: agent-rules/docs/setup/ci-integration.md
+
+name: Local AI Review (Qwen)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# 同じ PR で次の commit が来たら前回ジョブをキャンセル (節約)
+concurrency:
+  group: local-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  local-review:
+    runs-on: [self-hosted, vllm]
+    # 安全弁: ドラフト PR は skip
+    if: github.event.pull_request.draft == false
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write  # コメント投稿に必要
+
+    steps:
+      - name: Checkout (with full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute diff
+        id: diff
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          git diff "$BASE_SHA"..."$HEAD_SHA" > /tmp/diff.txt
+          SIZE=$(wc -c < /tmp/diff.txt)
+          echo "diff_size=$SIZE" >> "$GITHUB_OUTPUT"
+          echo "diff size: $SIZE bytes"
+
+      - name: Skip if diff too large
+        if: ${{ fromJson(steps.diff.outputs.diff_size) > 80000 }}
+        run: |
+          echo "::warning::diff > 80K bytes (~20K tokens) for Qwen mml=4096; skipping."
+          echo "Run /local-review manually with file-by-file splitting if needed."
+          exit 0
+
+      - name: Skip if diff empty
+        if: ${{ fromJson(steps.diff.outputs.diff_size) == 0 }}
+        run: |
+          echo "Empty diff; nothing to review."
+          exit 0
+
+      - name: Call local vLLM (Qwen-Coder-32B FP8)
+        id: review
+        run: |
+          # vLLM 健全性確認
+          if ! curl -sf -m 5 http://localhost:8000/v1/models > /dev/null; then
+            echo "::error::local vLLM (http://localhost:8000) is unreachable on this runner."
+            exit 1
+          fi
+
+          # プロンプト組立
+          DIFF=$(cat /tmp/diff.txt)
+          PROMPT=$(cat <<EOF
+          あなたは熟練のコードレビュアーです。以下の差分を 0 次レビューしてください。
+          目的は明らかなバグ・型違反・未処理エラー・セキュリティリスクの早期検出です。
+
+          以下の観点で重大度順に箇条書きで:
+          1. バグ・ロジックエラー (条件式の反転、off-by-one、null 参照、競合状態)
+          2. 型・契約違反 (引数の型・値域、戻り値の扱い、None/null チェック漏れ)
+          3. 未処理エラー (例外吸い込み、リソースリーク、トランザクション漏れ)
+          4. セキュリティ (入力検証、SQL/コマンドインジェクション、シークレット露出)
+          5. 明白なパフォーマンス問題
+
+          指摘がない場合は「指摘なし」と。スタイル・命名は対象外。
+
+          ---
+          $DIFF
+          ---
+          EOF
+          )
+
+          # context に応じた max_tokens 動的計算
+          MAX_LEN=$(curl -s http://localhost:8000/v1/models | jq -r '.data[0].max_model_len // 4096')
+          INPUT_TOK=$(( ${#PROMPT} / 4 ))
+          MAX_OUT=$(( MAX_LEN - INPUT_TOK - 100 ))
+          [ "$MAX_OUT" -lt 500 ] && MAX_OUT=500
+
+          # 呼出
+          PAYLOAD=$(jq -n \
+            --arg model qwen-coder \
+            --arg content "$PROMPT" \
+            --argjson mt "$MAX_OUT" \
+            '{model:$model, messages:[{role:"user", content:$content}], temperature:0.2, max_tokens:$mt}')
+
+          curl -sf -m 300 http://localhost:8000/v1/chat/completions \
+            -H 'Content-Type: application/json' \
+            -d "$PAYLOAD" | jq -r '.choices[0].message.content' > /tmp/review.md
+
+          # コメント本文を組立
+          {
+            echo "## 🤖 /local-review (Qwen-Coder-32B FP8, AGENT-17)"
+            echo ""
+            echo "_$(date '+%F %T %Z') 自動実行 (PR ${{ github.event.pull_request.head.sha }})_"
+            echo ""
+            cat /tmp/review.md
+            echo ""
+            echo "---"
+            echo "_この自動レビューは ADR-0001 の 0 次レビュー層です。Critical 指摘は人間が判断、修正後に /codex-review や /gemini-review を続行してください。_"
+          } > /tmp/comment.md
+
+      - name: Post comment to PR
+        if: ${{ fromJson(steps.diff.outputs.diff_size) > 0 && fromJson(steps.diff.outputs.diff_size) <= 80000 }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --body-file /tmp/comment.md
