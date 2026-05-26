@@ -1,0 +1,24 @@
+# Shared Codex config layer for agent-rules.
+#
+# Use with:
+#   codex --profile-v2 agent-rules
+#   codex exec --profile-v2 agent-rules "..."
+#
+# Keep machine-local settings such as auth, project trust entries, and personal
+# model defaults in ~/.codex/config.toml. Put shared MCP server definitions or
+# shared feature flags in this file.
+#
+# Example stdio MCP server:
+# [mcp_servers.example]
+# command = "example-mcp-server"
+# args = ["--stdio"]
+# env_vars = ["EXAMPLE_TOKEN"]
+#
+# Non-secret environment values can be added with:
+# [mcp_servers.example.env]
+# EXAMPLE_MODE = "shared"
+#
+# Example streamable HTTP MCP server:
+# [mcp_servers.example_http]
+# url = "https://mcp.example.com/mcp"
+# bearer_token_env_var = "EXAMPLE_MCP_TOKEN"

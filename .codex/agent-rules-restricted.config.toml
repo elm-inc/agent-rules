@@ -1,0 +1,8 @@
+# Restricted Codex config layer for audits and read-only inspection.
+#
+# Use with:
+#   codex --profile-v2 agent-rules-restricted
+#   codex exec --profile-v2 agent-rules-restricted "調査して"
+
+sandbox_mode = "read-only"
+model_reasoning_effort = "medium"

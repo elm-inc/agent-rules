@@ -1,0 +1,9 @@
+# Local-development Codex config layer.
+#
+# Use with:
+#   codex --profile-v2 agent-rules-local
+#
+# This profile is intentionally conservative. Add local MCP servers here only
+# when their command paths are portable across machines.
+
+model_reasoning_effort = "medium"
