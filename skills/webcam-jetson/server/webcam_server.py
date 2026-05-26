@@ -254,6 +254,76 @@ async def get_recording(request: web.Request) -> web.Response:
     return web.FileResponse(p)
 
 
+async def _ptz_get() -> dict:
+    cmd = ["v4l2-ctl", "--device", VIDEO_DEV,
+           "--get-ctrl=zoom_absolute,pan_absolute,tilt_absolute"]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    out, _ = await proc.communicate()
+    raw: dict[str, int] = {}
+    for line in out.decode(errors="replace").splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            try:
+                raw[k.strip()] = int(v.strip())
+            except ValueError:
+                pass
+    return {
+        "zoom": raw.get("zoom_absolute", 100) / 100.0,
+        "pan_percent": raw.get("pan_absolute", 0) / 360.0,
+        "tilt_percent": raw.get("tilt_absolute", 0) / 360.0,
+        "raw": raw,
+    }
+
+
+async def ptz(request: web.Request) -> web.Response:
+    if request.method == "GET":
+        return web.json_response(await _ptz_get())
+
+    params = request.rel_url.query
+    sets: list[str] = []
+    if params.get("reset", "").lower() in ("1", "true", "yes"):
+        sets = ["zoom_absolute=100", "pan_absolute=0", "tilt_absolute=0"]
+    else:
+        if "zoom" in params:
+            try:
+                z = float(params["zoom"])
+            except ValueError:
+                return web.Response(status=400, text="zoom must be number 1.0..5.0")
+            if not (1.0 <= z <= 5.0):
+                return web.Response(status=400, text="zoom out of range 1.0..5.0")
+            sets.append(f"zoom_absolute={int(round(z * 100))}")
+        for axis in ("pan", "tilt"):
+            if axis in params:
+                try:
+                    pct = float(params[axis])
+                except ValueError:
+                    return web.Response(
+                        status=400, text=f"{axis} must be number -100..100 (percent)")
+                if not (-100 <= pct <= 100):
+                    return web.Response(status=400, text=f"{axis} out of range -100..100")
+                raw_val = round(pct * 360 / 3600) * 3600  # snap to step 3600
+                sets.append(f"{axis}_absolute={raw_val}")
+        if not sets:
+            return web.Response(
+                status=400,
+                text="provide at least one of zoom/pan/tilt (or reset=1)",
+            )
+
+    cmd = ["v4l2-ctl", "--device", VIDEO_DEV]
+    for s in sets:
+        cmd += [f"--set-ctrl={s}"]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    _, err = await proc.communicate()
+    if proc.returncode != 0:
+        return web.Response(
+            status=502,
+            text=f"v4l2-ctl failed (rc={proc.returncode}): {err.decode(errors='replace')[:500]}",
+        )
+    return web.json_response(await _ptz_get())
+
+
 async def on_startup(app: web.Application) -> None:
     app["session"] = aiohttp.ClientSession()
 
@@ -270,6 +340,8 @@ def make_app() -> web.Application:
     app.router.add_post("/record", record)
     app.router.add_get("/recordings", list_recordings)
     app.router.add_get("/recordings/{name}", get_recording)
+    app.router.add_get("/ptz", ptz)
+    app.router.add_post("/ptz", ptz)
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
     return app

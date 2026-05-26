@@ -172,6 +172,28 @@ def cmd_stream_url(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ptz(args: argparse.Namespace) -> int:
+    api = base_url(args.host, args.port)
+    if args.reset:
+        r = httpx.post(f"{api}/ptz", params={"reset": "1"}, timeout=5.0)
+    elif args.zoom is None and args.pan is None and args.tilt is None:
+        r = httpx.get(f"{api}/ptz", timeout=5.0)
+    else:
+        params: dict[str, str] = {}
+        if args.zoom is not None:
+            params["zoom"] = f"{args.zoom}"
+        if args.pan is not None:
+            params["pan"] = f"{args.pan}"
+        if args.tilt is not None:
+            params["tilt"] = f"{args.tilt}"
+        r = httpx.post(f"{api}/ptz", params=params, timeout=5.0)
+    if r.status_code != 200:
+        print(f"error: {r.status_code} {r.text[:300]}", file=sys.stderr)
+        return 2
+    print(json.dumps(r.json(), indent=2, ensure_ascii=False))
+    return 0
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     server_src = Path(__file__).resolve().parent.parent / "server"
     if not server_src.is_dir():
@@ -255,6 +277,17 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--hls-port", type=int, dest="hls_port")
     sp.add_argument("protocol", choices=["mjpeg", "rtsp", "hls"], nargs="?", default="mjpeg")
     sp.set_defaults(func=cmd_stream_url)
+
+    sp = sub.add_parser("ptz", help="get/set digital PTZ (C920 等の UVC PTZ)")
+    http_opts(sp)
+    sp.add_argument("--zoom", type=float, help="1.0..5.0 (1.0 = no zoom)")
+    sp.add_argument("--pan", type=float,
+                    help="-100..100 percent (zoom > 1.0 のときのみ有効、step 10 にスナップ)")
+    sp.add_argument("--tilt", type=float,
+                    help="-100..100 percent (zoom > 1.0 のときのみ有効、step 10 にスナップ)")
+    sp.add_argument("--reset", action="store_true",
+                    help="zoom=1.0, pan=tilt=0 に戻す")
+    sp.set_defaults(func=cmd_ptz)
 
     sp = sub.add_parser("install", help="rsync server/ and run install.sh on Jetson")
     ssh_opts(sp)

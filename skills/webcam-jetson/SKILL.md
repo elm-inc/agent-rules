@@ -143,6 +143,33 @@ uv run ${SKILL_DIR}/scripts/webcam_jetson.py stream-url hls       # ブラウザ
 | `rtsp`  | `rtsp://<host>:8554/cam` | OBS / VLC / 解析パイプライン |
 | `hls`   | `http://<host>:8888/cam/index.m3u8` | iOS Safari / 長時間視聴 |
 
+### `ptz`
+
+UVC カメラ (C920 等) のデジタル zoom / pan / tilt を取得・変更する。**実 FOV は変えられない** (C920 は 78° 物理固定)。zoom はセンサクロップ + アップスケールなので画質が落ちる点に注意。
+
+```bash
+# 現状取得
+uv run ${SKILL_DIR}/scripts/webcam_jetson.py ptz
+
+# zoom 2× にして右に 30%
+uv run ${SKILL_DIR}/scripts/webcam_jetson.py ptz --zoom 2.0 --pan 30
+
+# zoom 3× / 上に 20%
+uv run ${SKILL_DIR}/scripts/webcam_jetson.py ptz --zoom 3.0 --tilt -20
+
+# デフォルトに戻す
+uv run ${SKILL_DIR}/scripts/webcam_jetson.py ptz --reset
+```
+
+| オプション | 範囲 | 説明 |
+|---|---|---|
+| `--zoom <float>` | 1.0〜5.0 | 1.0=no zoom、5.0=最大 (実効解像度 1/25 まで落ちる) |
+| `--pan <percent>` | -100〜+100 | zoom>1.0 でクロップ位置を左右 (内部で step 10 にスナップ) |
+| `--tilt <percent>` | -100〜+100 | 上下 (同上) |
+| `--reset` | | zoom/pan/tilt を全て default に戻す |
+
+UVC コマンドはデバイス側で即時反映されるので mediamtx 再起動不要 (配信中の RTSP/MJPEG にも次フレームから効く)。pan/tilt は zoom=1.0 のとき意味を持たない (クロップ無し)。
+
 ### `status`
 
 `systemctl status` (SSH 経由) と `/healthz` JSON を表示。
