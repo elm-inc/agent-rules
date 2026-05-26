@@ -1,7 +1,7 @@
 # agent-rules
 
 `Claude Code` / `Codex CLI` で使う **ルール・スキル・テンプレートの単一ソース**。
-各マシンの `~/CLAUDE.md`, `~/RULES.md`, `~/AGENTS.md`, `~/.claude/skills/*` は本リポへの symlink で同期する。
+各マシンの `~/CLAUDE.md`, `~/RULES.md`, `~/AGENTS.md`, `~/.claude/skills/*`, `~/.codex/skills/*`, `~/.codex/agent-rules.config.toml` は本リポへの symlink で同期する。
 
 > 改善はこのリポへの PR で行い、各マシンは `git pull` + `install.sh` で同期する。
 
@@ -33,7 +33,7 @@ git clone https://github.com/elm-inc/agent-rules ~/repos/github.com/elm-inc/agen
 |---|---|
 | OS | macOS / Linux (`bash` + `ln -s` が使えること) |
 | Claude Code | 既にインストール済み (`~/.claude/skills/` を読みに行く) |
-| Codex CLI | `/codex-*` スキルを使う場合のみ必要 |
+| Codex CLI | Codex で共通ルール・スキル・MCP 設定レイヤーを使う場合に必要 |
 | `gh` CLI | `/status` で PR/Issue を集計したい場合に必要 |
 | `git` | worktree 系スキルで必須 |
 
@@ -57,7 +57,7 @@ git pull
 
 symlink 経由なので、`git pull` した時点で `~/CLAUDE.md` 等の内容は自動的に最新になる。`install.sh` の再実行は **新しいスキルや新ファイルが追加されたとき** に必要。
 
-> **注意:** `install.sh` は不足分の symlink を追加するだけで、**削除・リネームされたスキルの symlink は自動で消さない**。スキルが削除/リネームされた場合は dangling symlink が `~/.claude/skills/` に残るため、手動で `rm` する必要がある (詳細はトラブルシュート参照)。
+> **注意:** `install.sh` は不足分の symlink を追加するだけで、**削除・リネームされたスキルの symlink は自動で消さない**。スキルが削除/リネームされた場合は dangling symlink が `~/.claude/skills/` や `~/.codex/skills/` に残るため、手動で `rm` する必要がある (詳細はトラブルシュート参照)。
 
 ---
 
@@ -69,8 +69,12 @@ symlink 経由なので、`git pull` した時点で `~/CLAUDE.md` 等の内容�
 | `~/RULES.md`  | `<repo>/RULES.md` |
 | `~/AGENTS.md` | `<repo>/AGENTS.md` |
 | `~/.claude/skills/<name>` | `<repo>/skills/<name>` (全スキル分) |
+| `~/.codex/skills/<name>` | `<repo>/skills/<name>` (全スキル分) |
+| `~/.codex/agent-rules.config.toml` | `<repo>/.codex/agent-rules.config.toml` |
 
 既に同名のファイル (symlink でない実体) がある場合は WARN を出してスキップする。手動で退避してから再実行する。
+
+`~/.codex/config.toml` はモデル設定、認証状態、プロジェクト trust 設定などの個人・マシン依存情報を含むため、`install.sh` では上書きも symlink 化もしない。共有 MCP 定義や共有 feature flag は `<repo>/.codex/agent-rules.config.toml` に置き、Codex 起動時に `--profile-v2 agent-rules` を付けて読み込む。
 
 ---
 
@@ -81,6 +85,7 @@ agent-rules/
 ├── CLAUDE.md         # Claude Code 用の上位ルール (~/CLAUDE.md にリンク)
 ├── AGENTS.md         # Codex CLI 用の上位ルール (~/AGENTS.md にリンク)
 ├── RULES.md          # ツール横断の共通ルール (~/RULES.md にリンク)
+├── .codex/           # Codex CLI 用の共有 config profile
 ├── install.sh        # symlink を貼る idempotent スクリプト
 ├── skills/           # Claude Code skill 群 (各ディレクトリが 1 skill)
 ├── templates/        # 各リポにコピーして使う雛形 (docs/ 構造など)
@@ -92,12 +97,22 @@ agent-rules/
 - **`RULES.md`** — Claude Code / Codex CLI 共通の原則 (言語、Git、セキュリティ、禁止事項、テスト等)。`CLAUDE.md` と `AGENTS.md` の冒頭でこのファイルを読むよう指示している
 - **`CLAUDE.md`** — Claude Code 専用の上位ルール。Codex 連携・並列開発・ドキュメント方針などを定義
 - **`AGENTS.md`** — Codex CLI 専用の上位ルール (現状は最小限)
+- **`.codex/agent-rules.config.toml`** — Codex CLI の共有 config layer。MCP 定義などを置き、`codex --profile-v2 agent-rules` で読み込む
 
 ---
 
 ## スキル一覧
 
-`~/.claude/skills/` に symlink されることで、Claude Code 内で `/<name>` として呼び出せる。
+`~/.claude/skills/` と `~/.codex/skills/` に symlink されることで、Claude Code / Codex CLI から同じ skill 定義を参照できる。
+
+Codex CLI で共有 config layer も使う場合:
+
+```bash
+codex --profile-v2 agent-rules
+codex exec --profile-v2 agent-rules "依頼内容"
+```
+
+MCP を共有管理したい場合は `.codex/agent-rules.config.toml` に `[mcp_servers.<name>]` を追加する。シークレット値は直接書かず、`env_vars = ["TOKEN_NAME"]` や `bearer_token_env_var = "TOKEN_NAME"` で環境変数名だけを共有する。
 
 ### Codex CLI 連携
 | スキル | 用途 |
@@ -174,6 +189,18 @@ mv ~/CLAUDE.md ~/CLAUDE.md.bak
 - `~/.claude/skills/<name>` が symlink になっているか確認: `ls -la ~/.claude/skills/`
 - Claude Code を再起動 (新規スキルは起動時に読み込まれる)
 
+### スキルが Codex CLI から見えない
+- `~/.codex/skills/<name>` が symlink になっているか確認: `ls -la ~/.codex/skills/`
+- Codex CLI を再起動 (新規スキルは起動時に読み込まれる)
+
+### Codex の共有 MCP 設定を使いたい
+`~/.codex/agent-rules.config.toml` が symlink になっているか確認し、Codex 実行時に `--profile-v2 agent-rules` を付ける。`--profile-v2` は runtime command 用なので、`codex mcp list` などの管理コマンドには適用されない:
+
+```bash
+codex --profile-v2 agent-rules
+codex exec --profile-v2 agent-rules "MCP が使えるか確認して"
+```
+
 ### symlink が別の場所を指している
 `install.sh` は **既存 symlink を上書きしない**。意図的にやる場合は手動で `rm` してから再実行。
 
@@ -186,4 +213,11 @@ find ~/.claude/skills -maxdepth 1 -type l ! -exec test -e {} \; -print
 
 # 問題なければ削除
 find ~/.claude/skills -maxdepth 1 -type l ! -exec test -e {} \; -delete
+```
+
+Codex 側も同様:
+
+```bash
+find ~/.codex/skills -maxdepth 1 -type l ! -exec test -e {} \; -print
+find ~/.codex/skills -maxdepth 1 -type l ! -exec test -e {} \; -delete
 ```
