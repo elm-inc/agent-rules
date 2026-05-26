@@ -94,6 +94,20 @@ codex --profile-v2 agent-rules exec "Linear MCP を使って、自分が参加�
 
 The expected MCP call is `linear/list_teams`. If OAuth expires, rerun `codex mcp login linear`.
 
+When starting another Codex session, use the same shared profile:
+
+```bash
+codex --profile-v2 agent-rules
+```
+
+If the session says that only a tool such as `multi_agent_v1` is available and Linear tools such as `linear/list_projects`, `linear/get_issue`, or `linear/save_issue` are not visible, first distinguish the two tool layers:
+
+- `codex mcp list` / `codex mcp get linear` checks local Codex CLI MCP registration.
+- The tools exposed directly inside a hosted conversation can be a smaller set and may not list MCP tools even when Codex CLI can use them.
+- `codex --profile-v2 agent-rules exec "Linear MCP ..."` is the reliable end-to-end check for Codex CLI MCP availability.
+
+If `codex exec` can call `linear/list_teams` but an interactive session cannot, restart that session with `codex --profile-v2 agent-rules`. If it still cannot use Linear, capture the startup log and `codex mcp get linear` output; the local registration is then present and the issue is in that session's tool exposure or startup path.
+
 ### Codex Apps MCP startup timeout
 
 Codex Apps may start an internal MCP server named `codex_apps`. If startup is slow, Codex can show:

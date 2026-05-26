@@ -115,4 +115,20 @@ else
     ok "all referenced MCP environment variables are set, or none are referenced"
 fi
 
+echo ""
+echo "== Linear MCP =="
+if command -v codex >/dev/null 2>&1; then
+    linear_mcp="$(codex mcp get linear 2>/dev/null || true)"
+    if [[ -z "$linear_mcp" ]]; then
+        warn "linear MCP is not registered. Run: codex mcp add linear --url https://mcp.linear.app/mcp"
+    elif grep -q 'url: https://mcp.linear.app/mcp' <<<"$linear_mcp"; then
+        ok "linear MCP registered at https://mcp.linear.app/mcp"
+    else
+        warn "linear MCP is registered, but not with the expected streamable HTTP URL:"
+        echo "$linear_mcp" | sed 's/^/  /'
+    fi
+else
+    warn "cannot check linear MCP because codex command is missing"
+fi
+
 exit "$STATUS"
