@@ -165,6 +165,62 @@ claude mcp add --transport http --scope user linear https://mcp.linear.app/mcp
 
 ドキュメント本体は `docs/` (Markdown) に置く。Linear の **Docs/Wiki 機能** は AI 摩擦・vendor lock-in のため採用しない (Issue 管理のみ Linear を使う)。
 
+## Notion 連携 (人間共有用、ADR-0003)
+
+ADR-0001 を「**設計図は in-repo**」に限定して再解釈し、**人間相手の共有ドキュメント**には Notion を併用する。Notion MCP server (公式、HTTP + OAuth) を Claude Code から叩く。
+
+### 役割分担 (ドキュメント置き場所)
+
+| 種別 | 置き場所 |
+|---|---|
+| ADR / architecture / design / setup notes | `docs/` (in-repo Markdown) — primary |
+| Issue 管理 | Linear |
+| **会議資料 / 議事録** | **Notion** Meeting Notes database |
+| **顧客提出物 / 提案書** | **Notion** Customer Deliverables database |
+| **ステータス共有 (週次/月次)** | **Notion** Weekly Status page |
+| **オンボーディング資料** | **Notion** Onboarding page |
+
+### 重複禁止ルール
+
+同じ内容を docs/ と Notion の両方に置かない。各情報の primary owner を 1 つに決め、もう一方からは link する。
+
+- 設計 / ADR の **why/how/what** は docs/ が primary、Notion からは GitHub blob URL でリンク
+- 議事録 / 会議メモは Notion が primary、決定事項を docs/adr/ に昇格する場合は「(議事録: Notion URL)」と注記
+- ステータス共有は Notion が primary、内容は Linear Issue から引用
+
+### セットアップ
+
+各マシンで 1 回だけ:
+
+```bash
+claude mcp add --transport http --scope user notion https://mcp.notion.com/mcp
+# Claude Code セッション内で /mcp notion → OAuth 認証 (ブラウザが開く)
+```
+
+### 主要 MCP tool
+
+| Tool | 用途 |
+|---|---|
+| `notion-fetch` | 既存ページ取得 (URL or ID 直指定、Notion AI 不要) |
+| `notion-create-pages` | 新規ページ作成 (parent ページ or database を指定) |
+| `notion-update-page` | プロパティ・本文の更新 |
+| `notion-create-comment` | ページにコメント追加 |
+| `notion-search` | キーワード検索 (**Notion AI 課金必須**、当面使わない) |
+
+### AI から Notion へ書く時のクセ
+
+- Markdown と完全互換ではない (block 構造)。**平文 + paragraph / heading / bullet list** のみで書く
+- 複雑なレイアウト (カラム、トグル、callout) は人間が手動編集
+- **重要な決定は必ず docs/adr/ に残してから** Notion にコピー (逆順禁止)
+- 機密案件のコード断片 / 内部 token を Notion に貼らない
+
+### 注意事項
+
+- Notion MCP の権限は OAuth ユーザの権限を継承 (個別ページ制限なし)。共有範囲は Notion 側のページ共有設定で管理
+- `notion-search` (= Notion AI) は当面使わず、`notion-fetch` で URL 直指定する
+- rate limit: 180 req/min (search は 30 req/min)
+- 月次評価 (`docs/design/ai-workflow.md` §8 と同期) で「Notion 重複ドリフト」を点検
+
 ## ドキュメント・図式
 
 設計と実装の可視化は **in-repo Markdown + Mermaid** を基盤とする。Notion / Confluence / Linear Docs などの SaaS には設計図を置かない（vendor lock-in、AI 摩擦、コード/ドキュメント分断のため）。
