@@ -68,6 +68,32 @@ bearer_token_env_var = "EXAMPLE_MCP_TOKEN"
 
 Use `scripts/render-codex-config.sh agent-rules` to inspect the combined standard profile and MCP fragments.
 
+### Linear MCP
+
+Linear is the primary task tracker for this setup. Register the official streamable HTTP MCP server once per machine:
+
+```bash
+codex mcp add linear --url https://mcp.linear.app/mcp
+codex mcp login linear
+```
+
+The login command opens a Linear OAuth URL and stores the local OAuth credentials under `~/.codex/`. Do not commit those credentials.
+
+Verify registration:
+
+```bash
+codex mcp list
+codex mcp get linear
+```
+
+Verify actual tool use with a small read-only request:
+
+```bash
+codex --profile-v2 agent-rules exec "Linear MCP を使って、自分が参加している Linear team 名を最大3件だけ表示してください。"
+```
+
+The expected MCP call is `linear/list_teams`. If OAuth expires, rerun `codex mcp login linear`.
+
 ### Codex Apps MCP startup timeout
 
 Codex Apps may start an internal MCP server named `codex_apps`. If startup is slow, Codex can show:
