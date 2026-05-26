@@ -1,0 +1,18 @@
+{
+  "name": "agent-rules",
+  "version": "0.1.0",
+  "description": "Shared elm-inc agent rules for Codex CLI.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agent Rules",
+    "shortDescription": "Use shared elm-inc agent rules in Codex.",
+    "longDescription": "Provides a small Codex plugin entrypoint for the agent-rules baseline. The canonical rules, skills, MCP fragments, and scripts remain in the repository root.",
+    "developerName": "elm-inc",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use the shared agent-rules baseline for this Codex session."
+  }
+}

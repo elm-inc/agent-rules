@@ -3,7 +3,7 @@
 # - top-level rules: CLAUDE.md, RULES.md, AGENTS.md
 # - Claude skills: ~/.claude/skills/*
 # - Codex skills: ~/.codex/skills/*
-# - Codex profile-v2 config layer: ~/.codex/agent-rules.config.toml
+# - Codex profile-v2 config layers: ~/.codex/*.config.toml
 #
 # Idempotent — re-running on an already-installed machine is safe.
 
@@ -65,7 +65,10 @@ done
 
 echo ""
 echo "== Codex config profile =="
-ln_if_not "$REPO_DIR/.codex/agent-rules.config.toml" "$HOME/.codex/agent-rules.config.toml"
+for config_file in "$REPO_DIR"/.codex/*.config.toml; do
+    config_name="$(basename "$config_file")"
+    ln_if_not "$config_file" "$HOME/.codex/$config_name"
+done
 
 echo ""
 echo "== Bash integration =="

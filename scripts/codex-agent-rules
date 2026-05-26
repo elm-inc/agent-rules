@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROFILE="${CODEX_AGENT_RULES_PROFILE:-agent-rules}"
+
+if [[ $# -gt 0 ]]; then
+    case "$1" in
+        mcp|plugin|login|logout|features|doctor|update|completion|help)
+            exec codex "$@"
+            ;;
+    esac
+fi
+
+exec codex --profile-v2 "$PROFILE" "$@"

@@ -1,0 +1,13 @@
+# Shared MCP examples. Keep this file comment-only until a server is approved
+# for all Codex CLI environments.
+#
+# Example stdio server:
+# [mcp_servers.example_stdio]
+# command = "example-mcp-server"
+# args = ["--stdio"]
+# env_vars = ["EXAMPLE_TOKEN"]
+#
+# Example HTTP server:
+# [mcp_servers.example_http]
+# url = "https://mcp.example.com/mcp"
+# bearer_token_env_var = "EXAMPLE_MCP_TOKEN"

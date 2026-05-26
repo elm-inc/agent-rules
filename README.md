@@ -70,11 +70,11 @@ symlink 経由なので、`git pull` した時点で `~/CLAUDE.md` 等の内容�
 | `~/AGENTS.md` | `<repo>/AGENTS.md` |
 | `~/.claude/skills/<name>` | `<repo>/skills/<name>` (全スキル分) |
 | `~/.codex/skills/<name>` | `<repo>/skills/<name>` (全スキル分) |
-| `~/.codex/agent-rules.config.toml` | `<repo>/.codex/agent-rules.config.toml` |
+| `~/.codex/*.config.toml` | `<repo>/.codex/*.config.toml` |
 
 既に同名のファイル (symlink でない実体) がある場合は WARN を出してスキップする。手動で退避してから再実行する。
 
-`~/.codex/config.toml` はモデル設定、認証状態、プロジェクト trust 設定などの個人・マシン依存情報を含むため、`install.sh` では上書きも symlink 化もしない。共有 MCP 定義や共有 feature flag は `<repo>/.codex/agent-rules.config.toml` に置き、Codex 起動時に `--profile-v2 agent-rules` を付けて読み込む。
+`~/.codex/config.toml` はモデル設定、認証状態、プロジェクト trust 設定などの個人・マシン依存情報を含むため、`install.sh` では上書きも symlink 化もしない。共有 MCP 定義や共有 feature flag は `<repo>/.codex/*.config.toml` に置き、Codex 起動時に `--profile-v2 agent-rules` 等を付けて読み込む。
 
 ---
 
@@ -85,7 +85,7 @@ agent-rules/
 ├── CLAUDE.md         # Claude Code 用の上位ルール (~/CLAUDE.md にリンク)
 ├── AGENTS.md         # Codex CLI 用の上位ルール (~/AGENTS.md にリンク)
 ├── RULES.md          # ツール横断の共通ルール (~/RULES.md にリンク)
-├── .codex/           # Codex CLI 用の共有 config profile
+├── .codex/           # Codex CLI 用の共有 config profile / MCP fragments
 ├── install.sh        # symlink を貼る idempotent スクリプト
 ├── skills/           # Claude Code skill 群 (各ディレクトリが 1 skill)
 ├── templates/        # 各リポにコピーして使う雛形 (docs/ 構造など)
@@ -97,7 +97,7 @@ agent-rules/
 - **`RULES.md`** — Claude Code / Codex CLI 共通の原則 (言語、Git、セキュリティ、禁止事項、テスト等)。`CLAUDE.md` と `AGENTS.md` の冒頭でこのファイルを読むよう指示している
 - **`CLAUDE.md`** — Claude Code 専用の上位ルール。Codex 連携・並列開発・ドキュメント方針などを定義
 - **`AGENTS.md`** — Codex CLI 専用の上位ルール (現状は最小限)
-- **`.codex/agent-rules.config.toml`** — Codex CLI の共有 config layer。MCP 定義などを置き、`codex --profile-v2 agent-rules` で読み込む
+- **`.codex/*.config.toml`** — Codex CLI の共有 config layer。MCP 定義などを置き、`codex --profile-v2 agent-rules` 等で読み込む
 
 ---
 
@@ -113,6 +113,19 @@ codex exec --profile-v2 agent-rules "依頼内容"
 ```
 
 MCP を共有管理したい場合は `.codex/agent-rules.config.toml` に `[mcp_servers.<name>]` を追加する。シークレット値は直接書かず、`env_vars = ["TOKEN_NAME"]` や `bearer_token_env_var = "TOKEN_NAME"` で環境変数名だけを共有する。
+
+Codex 向けの詳細な運用・検証手順は [`docs/setup/codex-cli.md`](docs/setup/codex-cli.md) を参照。
+
+補助スクリプト:
+
+| スクリプト | 用途 |
+|---|---|
+| `scripts/codex-agent-rules` | `--profile-v2 agent-rules` 付きで Codex を起動 |
+| `scripts/codex-doctor.sh` | symlink / TOML / MCP env var / dangling skill link を確認 |
+| `scripts/validate-codex-skills.sh` | Codex skill として最低限の frontmatter を確認 |
+| `scripts/render-codex-config.sh` | profile と MCP fragment を連結して確認 |
+
+Codex plugin / marketplace で配布したい場合の最小 scaffold として `plugins/agent-rules/` と `.agents/plugins/marketplace.json` も置いている。現時点の推奨インストール経路は引き続き `install.sh` による symlink。
 
 ### Codex CLI 連携
 | スキル | 用途 |

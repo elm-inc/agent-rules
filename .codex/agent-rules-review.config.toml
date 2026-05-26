@@ -1,0 +1,8 @@
+# Review-oriented Codex config layer.
+#
+# Use with:
+#   codex --profile-v2 agent-rules-review review --uncommitted
+#   codex exec --profile-v2 agent-rules-review "レビューして"
+
+model_reasoning_effort = "high"
+model_verbosity = "medium"
