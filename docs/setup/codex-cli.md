@@ -68,6 +68,31 @@ bearer_token_env_var = "EXAMPLE_MCP_TOKEN"
 
 Use `scripts/render-codex-config.sh agent-rules` to inspect the combined standard profile and MCP fragments.
 
+### Codex Apps MCP startup timeout
+
+Codex Apps may start an internal MCP server named `codex_apps`. If startup is slow, Codex can show:
+
+```text
+MCP client for `codex_apps` timed out after 30 seconds
+```
+
+For Codex CLI 0.133.0, adding only this table to `~/.codex/config.toml` is not safe because it can fail config parsing with `invalid transport`:
+
+```toml
+[mcp_servers.codex_apps]
+startup_timeout_sec = 90
+```
+
+If Codex Apps are not needed on the machine, disable the Apps MCP path locally instead:
+
+```toml
+[features]
+apps = false
+enable_mcp_apps = false
+```
+
+If Apps are required, prefer upgrading Codex CLI first and then retesting the timeout override. Keep this setting machine-local until the Codex version in use accepts the partial `codex_apps` timeout table under `--strict-config`.
+
 ## Validation
 
 ```bash
