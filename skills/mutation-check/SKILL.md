@@ -1,7 +1,7 @@
 ---
 name: mutation-check
 description: 既存のテスト (含 /test-generate 出力) が本当にバグを catch できるかを mutation testing で自己検証する。生存変異率が高ければ /test-generate --mutants で追加生成する連鎖を案内する。AI 生成テストの tautology (実装と同じ誤解で書かれた assertion) を機械的に検出する根本対策
-argument-hint: <対象パス> [--language python|js|ts|auto] [--threshold 90]
+argument-hint: "<対象パス> [--language python|js|ts|auto] [--threshold 90]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(npx *) Bash(npm *) Bash(uvx *) Bash(mutmut *) Bash(pytest *) Bash(find *) Bash(grep *) Bash(cat *) Bash(jq *) Read
 ---

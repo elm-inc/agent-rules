@@ -1,7 +1,7 @@
 ---
 name: test-generate
 description: テスト観点の列挙とテスト実装を生成する。--brainstorm で複数 LLM (DeepSeek-R1 + Qwen + 任意で Distill/Gemini) を並列実行して観点を多面化、--implement で観点ファイルからコード生成。引数なしは旧挙動 (列挙 + 実装を 1 ステップで、Qwen 単独)
-argument-hint: <対象> [--brainstorm | --implement <観点ファイル>] [--with-distill] [--with-gemini] [--property] [--mutants <list>]
+argument-hint: "<対象> [--brainstorm | --implement <観点ファイル>] [--with-distill] [--with-gemini] [--property] [--mutants <list>]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(flock *) Bash(docker *) Read Write Edit
 ---

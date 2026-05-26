@@ -1,7 +1,7 @@
 ---
 name: atopile-view
 description: atopile プロジェクトの回路を確認する。BOM・接続済みピン・接続ツリーをサマリ表示し、KiCad pcbnew や PDF エクスポートなど次のアクションを案内する。実験フォルダで「回路を見たい」「pcbnew を開きたい」「BOM を確認したい」「接続を確認したい」ときに使用
-argument-hint: [<experiment-name|path>] [--target <build>] [--bom | --pinout | --tree | --graph [--png|--svg] | --kicad | --pdf [<file>]]
+argument-hint: "[<experiment-name|path>] [--target <build>] [--bom | --pinout | --tree | --graph [--png|--svg] | --kicad | --pdf [<file>]]"
 disable-model-invocation: false
 allowed-tools: Bash(ato *) Bash(pcbnew *) Bash(kicad-cli *) Bash(cat *) Bash(ls *) Bash(jq *) Bash(python3 *) Bash(awk *) Bash(find *) Bash(test *) Bash(which *) Bash(git *) Bash(uv *) Bash(column *) Bash(head *) Bash(pgrep *) Bash(xdg-open *) Bash(npx *) Read Write
 ---

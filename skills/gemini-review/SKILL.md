@@ -1,7 +1,7 @@
 ---
 name: gemini-review
 description: Gemini 2.5 Pro の長文コンテキスト (1M+ token) でリポジトリ横断レビューを行う。大規模リファクタ・複数ファイルの整合性・ADR とコードの drift・全体アーキテクチャ検証など、Claude/Codex の通常コンテキストに収まらない範囲で使う
-argument-hint: [--scope <path or glob> | --diff [--base <branch>] | --adr <path>] [+ 観点]
+argument-hint: "[--scope <path or glob> | --diff [--base <branch>] | --adr <path>] [+ 観点]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Read
 ---

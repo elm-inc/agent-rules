@@ -1,7 +1,7 @@
 ---
 name: linear-plan
 description: Linear に Project + サブ Issue 群を一括作成する。複数フェーズに分かれる大きな計画 (リファクタリング、新機能、移行など) を Linear に乗せて進捗管理を始めたいときに使用
-argument-hint: <Project名> [--design <docs/design/path.md>] [--phases "phase1, phase2, ..."]
+argument-hint: "<Project名> [--design <docs/design/path.md>] [--phases \"phase1, phase2, ...\"]"
 disable-model-invocation: false
 allowed-tools: mcp__linear__* Read Write Edit Bash(git *) Bash(date *)
 ---

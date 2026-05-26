@@ -1,7 +1,7 @@
 ---
 name: cli-help
 description: モダン CLI ツール (rg/fd/bat/eza/dust/btm/procs/delta/sd/hyperfine/tldr/jless/tokei/zoxide) の使い方を即引きする。「rg の使い方」「grep の代替」「du より見やすいやつ」などの問い合わせで cheatsheet から該当箇所を抜粋する
-argument-hint: <tool-name | old-command>
+argument-hint: "<tool-name | old-command>"
 allowed-tools: Read, Bash(awk *)
 ---
 

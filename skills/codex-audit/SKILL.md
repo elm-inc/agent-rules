@@ -1,7 +1,7 @@
 ---
 name: codex-audit
 description: Codex CLI にプロジェクト全体の設計・実装の網羅的レビューを依頼する。コード全体をレビューしたい、設計を見直したい、品質監査をしたいときに使用
-argument-hint: [レビュー観点（例: セキュリティ, パフォーマンス, アーキテクチャ）]
+argument-hint: "[レビュー観点（例: セキュリティ, パフォーマンス, アーキテクチャ）]"
 disable-model-invocation: false
 allowed-tools: Bash(codex *) Bash(git *)
 ---

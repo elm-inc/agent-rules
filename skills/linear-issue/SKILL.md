@@ -1,7 +1,7 @@
 ---
 name: linear-issue
 description: Linear Issue の作成・表示・状態変更を行う。Issue を新規作成したい、状態を In Progress や Done に遷移したい、Issue の詳細を見たいときに使用
-argument-hint: <subcommand> [args...]   (create|view|start|done|update)
+argument-hint: "<subcommand> [args...]   (create|view|start|done|update)"
 disable-model-invocation: false
 allowed-tools: mcp__linear__* Read Write Edit Bash(git *)
 ---

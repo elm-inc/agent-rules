@@ -1,7 +1,7 @@
 ---
 name: docs-visualize
 description: コードと既存設計を読み解いてプロジェクトを C4 model + 状態機械 + シーケンス図で可視化する。docs/architecture/ に Mermaid で書き出す。「可視化」「アーキテクチャ図」「視覚化」「全体像」を要求されたときに使用
-argument-hint: [--scope <絞り込み>] [--force]
+argument-hint: "[--scope <絞り込み>] [--force]"
 disable-model-invocation: false
 allowed-tools: Bash(ls *) Bash(find *) Bash(cat *) Bash(grep *) Bash(rg *) Bash(git *) Bash(wc *) Read Write Edit
 ---
