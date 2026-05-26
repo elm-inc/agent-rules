@@ -12,15 +12,19 @@ Linear に乗っているプロジェクト・課題・cycle の現状を 1 画�
 
 ## 前提
 
-Linear MCP が `claude mcp add --transport http --scope user linear https://mcp.linear.app/mcp` で登録され、`/mcp` で OAuth 認証済であること。未登録なら以下を案内して中断する:
+Linear MCP が登録され、OAuth 認証済であること。未登録なら利用中のエージェントに応じて以下を案内して中断する:
 
 ```
-Linear MCP が未登録です。以下を実行してください:
+Linear MCP が未登録です。Codex CLI では以下を実行してください:
+  codex mcp add linear --url https://mcp.linear.app/mcp
+  codex mcp login linear
+
+Claude Code では以下を実行してください:
   claude mcp add --transport http --scope user linear https://mcp.linear.app/mcp
   /mcp linear  # OAuth 認証
 ```
 
-> 旧 `--transport sse https://mcp.linear.app/sse` は 2026-04-08 で deprecated。既存 SSE 登録があれば `claude mcp remove linear -s user` してから上記で再登録する。
+> 旧 `--transport sse https://mcp.linear.app/sse` は 2026-04-08 で deprecated。既存 SSE 登録があれば削除してから上記の streamable HTTP で再登録する。
 
 ## 引数の解釈
 
