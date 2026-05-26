@@ -1,7 +1,7 @@
 ---
 name: webcam-jetson
 description: Jetson (Tailscale 経由) に常駐する webcam サーバ (mediamtx + Python aiohttp) からスナップショット / 録画 / ライブ視聴 URL を取得する。Jetson に Logitech 等の USB カメラを繋いで MJPEG / RTSP / HLS で映像を取り出したいときに使用
-argument-hint: <subcommand> [options] | snapshot | record | stream-url | install | status | restart | logs
+argument-hint: "<subcommand> [options] | snapshot | record | stream-url | install | status | restart | logs"
 disable-model-invocation: false
 allowed-tools: Bash(uv *) Bash(ssh *) Bash(scp *) Bash(rsync *) Bash(ls *) Bash(cat *) Bash(mkdir *) Bash(test *) Read Write
 ---

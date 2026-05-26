@@ -1,7 +1,7 @@
 ---
 name: codex-review
 description: Codex CLI にコードレビューを依頼する。コードの変更内容をレビューしてほしい、Codex にレビューさせたい、セカンドオピニオンがほしいときに使用
-argument-hint: [レビュー対象や追加指示（例: --base main, --uncommitted, セキュリティ観点で）]
+argument-hint: "[レビュー対象や追加指示（例: --base main, --uncommitted, セキュリティ観点で）]"
 disable-model-invocation: false
 allowed-tools: Bash(codex *) Bash(git *)
 ---

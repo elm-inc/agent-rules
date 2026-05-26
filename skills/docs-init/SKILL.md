@@ -1,7 +1,7 @@
 ---
 name: docs-init
 description: 新規 or 既存プロジェクトに docs/{adr,architecture,design} の標準構造を展開する。agent-rules/templates/docs/ から雛形をコピーし、不足分のみ追加する (既存ファイルは上書きしない)
-argument-hint: [--force]
+argument-hint: "[--force]"
 disable-model-invocation: false
 allowed-tools: Bash(ls *) Bash(find *) Bash(mkdir *) Bash(cp *) Bash(test *) Read Write Edit
 ---

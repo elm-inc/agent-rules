@@ -1,7 +1,7 @@
 ---
 name: codex-task
 description: Codex CLI にコード修正や実装タスクを依頼する。Codex に作業させたい、Codex で実装してほしい、Codex に修正を任せたいときに使用
-argument-hint: <タスクの説明>
+argument-hint: "<タスクの説明>"
 disable-model-invocation: false
 allowed-tools: Bash(codex *) Bash(git *)
 ---

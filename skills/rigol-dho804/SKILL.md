@@ -1,7 +1,7 @@
 ---
 name: rigol-dho804
 description: RIGOL DHO804 オシロスコープから LAN (VXI-11/LXI) 経由でスクリーンショット・波形・計測値・設定を取得する。波形を CSV で取りたい、画面を保存したい、Vpp/周波数を読みたいときに使用
-argument-hint: <subcommand> [options] | info | screenshot | waveform | measure | setup
+argument-hint: "<subcommand> [options] | info | screenshot | waveform | measure | setup"
 disable-model-invocation: false
 allowed-tools: Bash(uv *) Bash(ls *) Bash(cat *) Bash(mkdir *) Bash(test *) Read Write
 ---

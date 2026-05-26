@@ -1,7 +1,7 @@
 ---
 name: deepseek-redteam
 description: DeepSeek-R1 (思考連鎖モデル) で設計やコード変更の盲点・代替案・破綻ケースを炙り出すレッドチーム。docs/design/*.md や差分に対して「致命的な見落としは?」を問う。Anthropic/OpenAI 系と異なる学習分布なので groupthink 対策に有効
-argument-hint: <対象ファイル | --diff [--base <branch>] | --design <path>> [+ 観点]
+argument-hint: "<対象ファイル | --diff [--base <branch>] | --design <path>> [+ 観点]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(ls *) Read
 ---

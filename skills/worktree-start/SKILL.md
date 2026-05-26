@@ -1,7 +1,7 @@
 ---
 name: worktree-start
 description: 並列開発用の git worktree を作成し、タスクをレジストリに登録する。新しいタスクを並列で始めたい、worktree を作りたいときに使用
-argument-hint: <タスク名> <タスクの説明> [--linear <ID>] [--no-remote]
+argument-hint: "<タスク名> <タスクの説明> [--linear <ID>] [--no-remote]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(jq *) Bash(cat *) Bash(mkdir *) Bash(date *) mcp__linear__* Read Write
 ---

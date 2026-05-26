@@ -1,7 +1,7 @@
 ---
 name: linear-status
 description: Linear の Project / Issue / cycle の現状を表示する。今どんなプロジェクトが走っているか、自分のアサインは何か、cycle のゴールはどこかを 1 画面で確認したいときに使用
-argument-hint: [--project <name>] [--mine] [--cycle]
+argument-hint: "[--project <name>] [--mine] [--cycle]"
 disable-model-invocation: false
 allowed-tools: mcp__linear__* Read Bash(git *) Bash(cat *)
 ---

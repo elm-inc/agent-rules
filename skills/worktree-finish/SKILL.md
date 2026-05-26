@@ -1,7 +1,7 @@
 ---
 name: worktree-finish
 description: 並列開発タスクを完了し worktree のブランチをベースブランチにマージする。タスクが完了した、worktree をマージしたいときに使用
-argument-hint: [タスク名]
+argument-hint: "[タスク名]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(jq *) Bash(cat *) Bash(python3 *) mcp__linear__* Read Write
 ---

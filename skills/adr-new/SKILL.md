@@ -1,7 +1,7 @@
 ---
 name: adr-new
 description: 新しい ADR を docs/adr/ に作成する。通し番号を自動採番し、テンプレを展開してファイルを開く準備をする。タイトル文字列を引数で受け取る
-argument-hint: <ADRタイトル>
+argument-hint: "<ADRタイトル>"
 disable-model-invocation: false
 allowed-tools: Bash(ls *) Bash(find *) Bash(cat *) Bash(date *) Bash(sed *) Read Write Edit
 ---

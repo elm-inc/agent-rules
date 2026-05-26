@@ -1,7 +1,7 @@
 ---
 name: status
 description: 現状把握のブリーフィング。最近のコミット、open PR/Issue、worktree タスク、project memory、未コミット変更を一覧表示する。セッション開始時や「今どうなってる？」を確認したいときに使用
-argument-hint: [--since <期間>] [--repo <名前>]
+argument-hint: "[--since <期間>] [--repo <名前>]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(gh *) Bash(ls *) Bash(find *) Bash(cat *) Bash(jq *) Bash(date *) Bash(python3 *) Read
 ---
