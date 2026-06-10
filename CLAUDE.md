@@ -277,6 +277,22 @@ claude mcp add --transport http --scope user notion https://mcp.notion.com/mcp
 
 設計変更時は **ADR（なぜ）→ architecture（どう動くか）→ コード（実装）** の順で更新する。図がコードから drift しないよう注意する。
 
+## デザイン個性付け (AIっぽさ回避、ADR-0004)
+
+生成AIの UI モック・スライドが median（青紫グラデ・glassmorphism・Inter 既定・絵文字アイコン・対称3カラム…）に収束し「一目でAI製」になる問題を、**意図的に偏らせたデザインDNAの注入**で解く。参照例から個性を抽出してプロファイル化し、生成時に注入（ソフト）、仕上げに批評ループで矯正（ハード）する。
+
+### スキル一覧
+
+| スキル | 用途 | コマンド例 |
+|--------|------|-----------|
+| `/design-voice extract` | 参照例(URL/画像/コード)から個性を抽出しプロファイル生成 | `/design-voice extract https://... --name editorial-mono` |
+| `/design-voice use` | プロファイルを context 注入(ソフト適用)+ 発散 seed | `/design-voice use editorial-mono`, `/design-voice use --list` |
+| `/design-voice critic` | 生成物の「AI臭スコア」採点 + 閾値未満まで再生成(ハード) | `/design-voice critic dist/ --threshold 30` |
+
+- プロファイルは `skills/design-voice/profiles/<name>/`(`dna.md` + `tokens.json` + `references/`)。同梱実例は `editorial-mono`
+- 共通ブロックリストは `skills/design-voice/anti-tells.md`、機械 lint は `skills/design-voice/scripts/ai_smell_lint.py`
+- 軽微な用途は `use` のソフト適用のみ。仕上げ・量産時に `critic` を回す（a11y ガードレール必須）
+
 ## シェル環境 (モダン CLI ツール)
 
 Rust 製モダン CLI ツール (`rg`, `fd`, `bat`, `eza`, `dust`, `btm`, `procs`, `delta`, `sd`, `hyperfine`, `tldr`, `jless`, `tokei`, `zoxide`) を覚えきれず使えていない問題を解消するための仕組み。

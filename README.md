@@ -155,6 +155,13 @@ Codex plugin / marketplace で配布したい場合の最小 scaffold として 
 |---|---|
 | `/status` | 最近のコミット・open PR/Issue・worktree タスク・project memory・未コミット変更を一覧 |
 
+### デザイン個性付け (AIっぽさ回避)
+| スキル | 用途 |
+|---|---|
+| `/design-voice extract` | 参照例から個性を抽出しプロファイル生成 |
+| `/design-voice use` | プロファイルを context 注入(ソフト適用)+ 発散 seed |
+| `/design-voice critic` | 生成物の「AI臭スコア」採点 + 閾値未満まで再生成(ハード) |
+
 各スキルの詳細は `skills/<name>/SKILL.md` を参照。
 
 ---
