@@ -2,360 +2,161 @@
 
 **重要: 最初に `~/RULES.md` を読み込み、記載されたルールをすべて遵守すること。**
 
+このファイルは「いつ何のスキルを使うか」のルーティング索引。各仕組みの手順・内部詳細は各 `SKILL.md` / `docs/` にあり、リンクで辿る。
+
 ## AI 開発ワークフロー (多層・多モデル)
 
-実装は Claude Opus 4.8、レビュー・検証・テスト生成は **複数 LLM の役割分担 + 機械検証** で多層化する。同じ間違いをしないよう、Anthropic/OpenAI 系に偏らせず Gemini・DeepSeek・ローカル LLM を混ぜる。最上位の Claude Fable 5 は高難度タスク限定でサブエージェント委譲する (下記「モデル使い分け」)。
+実装は Claude Opus 4.8、レビュー・検証・テスト生成は **複数 LLM の役割分担 + 機械検証** で多層化する。Anthropic/OpenAI 系に偏らせず Gemini・DeepSeek・ローカル LLM を混ぜる (groupthink 回避)。最上位の Claude Fable 5 は高難度タスク限定でサブエージェント委譲する。
+設計判断の根拠: [`docs/adr/0001`](docs/adr/0001-multi-llm-development-workflow.md), [`docs/adr/0002`](docs/adr/0002-multi-model-test-generation.md) / 全体像: [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md)
 
-### 役割分担
+### 役割分担とスキル
 
 | ロール | モデル / ツール | スキル |
 |---|---|---|
 | 実装 (主) | Claude Opus 4.8 | (Claude Code 本体) |
 | 高難度実装・設計 (委譲) | Claude Fable 5 (subagent) | `/fable-task` |
-| 最終レビュー (最高精度・限定使用) | Claude Fable 5 (subagent) | `/fable-review` |
-| 0 次レビュー (高速・無料) | ローカル Qwen2.5-Coder-32B (vLLM, FP8) | `/local-review` |
+| 最終レビュー (最高精度・限定) | Claude Fable 5 (subagent) | `/fable-review` |
+| 0 次レビュー (高速・無料) | ローカル Qwen2.5-Coder-32B | `/local-review` |
 | セカンドオピニオン (異種ベンダー) | Codex (GPT-5) | `/codex-review`, `/codex-task`, `/codex-audit` |
-| 設計レッドチーム (思考連鎖) | DeepSeek-R1 (API) | `/deepseek-redteam` |
-| リポ横断 (1M context) | Gemini 2.5 Pro (API) | `/gemini-review` |
-| テスト観点抽出 (新) | DeepSeek-R1 + Qwen (デフォルト 2 並列)、+任意で Distill/Gemini | `/test-generate --brainstorm` |
-| テスト実装 | Qwen-Coder-32B FP8 (主) | `/test-generate --implement` または引数なし旧挙動 |
-| テストデータ生成 | Qwen (バッチ推論) | `/test-data` |
-| 機械検証 | pre-commit hooks (ruff/mypy/semgrep/type-check) | (各リポで設定) |
+| 設計レッドチーム (思考連鎖) | DeepSeek-R1 | `/deepseek-redteam` |
+| リポ横断 (1M context) | Gemini 2.5 Pro | `/gemini-review` |
+| テスト観点抽出・実装 | DeepSeek-R1 + Qwen | `/test-generate` (`--brainstorm` / `--implement`) |
+| テストデータ生成 | Qwen (バッチ) | `/test-data` |
+| テスト健全性検証 | mutation testing | `/mutation-check` |
+| 機械検証 | pre-commit (ruff/mypy/semgrep) | (各リポで設定) |
 
 ### モデル使い分け (Opus 4.8 / Fable 5)
 
-常用 (セッションモデル) は **Opus 4.8**。Fable 5 は $10/$50 per MTok で Opus の 2 倍のため、Max プラン上限の消費が約 2 倍速い。デフォルトでは使わず、以下に該当するタスクを検知したら **Claude が自分で判断して** Fable 5 サブエージェントに委譲する (委譲前に一言宣言する):
+常用 (セッションモデル) は **Opus 4.8**。Fable 5 は $10/$50 per MTok で Opus の 2 倍 (Max 上限を約 2 倍速く消費)。デフォルトでは使わず、以下を検知したら **Claude が自分で判断して** Fable 5 サブエージェントに委譲する (委譲前に一言宣言):
 
-| 該当条件 | 使うスキル |
+| 該当条件 | スキル |
 |---|---|
-| アーキテクチャ・設計判断で選択肢が拮抗し、誤ると手戻りが大きい (ADR の比較検討など) | `/fable-task` |
-| 10+ ファイルを跨ぐ大規模リファクタ・新機能の計画/実装 | `/fable-task` |
-| 一度修正を試みて失敗した原因不明のバグ調査 | `/fable-task` |
+| 設計判断が拮抗し誤ると手戻りが大きい (ADR 比較検討など) | `/fable-task` |
+| 10+ ファイル横断の大規模リファクタ・新機能の計画/実装 | `/fable-task` |
+| 一度修正に失敗した原因不明バグの調査 | `/fable-task` |
 | セキュリティ・認証・課金・データ破壊リスクに関わる変更の最終レビュー | `/fable-review` |
-| 大規模変更のマージ前最終確認、他レビュー段で意見が割れた差分 | `/fable-review` |
+| 大規模変更のマージ前最終確認、レビュー意見が割れた差分 | `/fable-review` |
 
-- 該当しない通常タスク・軽微な修正・調査はセッションモデルで直接実施する
-- 委譲はサブエージェント単位で行う (セッション全体を Fable にしない)。セッション全体を切り替えたい場合のみユーザーが `/model fable` を実行する
-- Fable 5 への委譲は完全な仕様を最初に一括で渡す (細切れの往復はコストも品質も悪化する)
-
-### スキル一覧
-
-| スキル | 用途 | コマンド例 |
-|--------|------|-----------|
-| `/local-review` | 差分の 0 次レビュー (秒オーダー) | `/local-review`, `/local-review --base main` |
-| `/codex-review` | Codex によるセカンドオピニオン | `/codex-review`, `/codex-review --base main` |
-| `/codex-audit` | Codex による全体監査 | `/codex-audit`, `/codex-audit セキュリティ` |
-| `/codex-task` | Codex に修正・実装を委譲 | `/codex-task エラーハンドリングを追加` |
-| `/deepseek-redteam` | 設計・差分の盲点炙り出し | `/deepseek-redteam --design docs/design/foo.md` |
-| `/gemini-review` | リポ横断・ADR 整合性レビュー (1M context) | `/gemini-review --scope apps/web` |
-| `/test-generate` | テストケース列挙 + 実装生成 (2 モード対応、ADR-0002) | `/test-generate src/utils/date.ts:format`, `/test-generate ... --brainstorm`, `/test-generate ... --implement <観点ファイル>` |
-| `/test-data` | 業務的に妥当なテストデータ生成 | `/test-data app/models/user.py:User --count 50` |
-| `/fable-task` | 大規模・高難易度タスクを Fable 5 に委譲 | `/fable-task 認証基盤を OAuth2 に移行（前提・制約・完了条件を記載）` |
-| `/fable-review` | Fable 5 による最終レビュー (限定使用) | `/fable-review --base main`, `/fable-review セキュリティ観点で` |
+該当しない通常タスク・軽微な修正はセッションモデルで直接実施。委譲はサブエージェント単位で行い (セッション全体を Fable にしない)、完全な仕様を最初に一括で渡す。セッション全体を切り替えたい場合のみユーザーが `/model fable` を実行する。
 
 ### コミット時のフロー (推奨)
 
 ```
-[設計]
-  Claude が docs/design/foo.md 起草
-   └→ /deepseek-redteam で盲点炙り出し
-   └→ (任意) /codex-audit で実装視点ツッコミ
-
-[実装]
-  Opus 4.8 で実装 (高難度は /fable-task で Fable 5 に委譲)
-
-[コミット前]
-  /local-review                      ← 0 次 (秒)
-  pre-commit hooks (型/lint/semgrep) ← 機械
-  (必要時) /test-generate            ← テスト追加
-  /codex-review                      ← セカンドオピニオン
-  (必要時) /gemini-review            ← リポ横断
-  (高リスク変更のみ) /fable-review   ← Fable 5 最終レビュー
-
-[実行検証]
-  /verify (Claude Code 標準スキル), E2E
+[設計] docs/design/foo.md 起草 → /deepseek-redteam で盲点炙り出し → (任意) /codex-audit
+[実装] Opus 4.8 (高難度は /fable-task で Fable 5 委譲)
+[コミット前] /local-review → pre-commit → (必要時) /test-generate → /codex-review
+             → (10+ファイル/ADR drift 疑い時) /gemini-review → (高リスク変更のみ) /fable-review
+[実行検証] /verify, E2E
 ```
 
-軽微な変更では `/local-review` + pre-commit のみで十分。`/gemini-review` は 10+ ファイル変更や ADR drift 疑い時のみ。
+軽微な変更では `/local-review` + pre-commit のみで十分。
 
-### セットアップ
+### セットアップ・トラブル対処
 
-新規マシンでローカル LLM 系スキルを使う前に [`docs/setup/local-llm.md`](docs/setup/local-llm.md) の手順で vLLM サーバを起動する。クラウド系の API キーは `scripts/env-snippet.sh` の方式 (`~/.*_token` ファイル → `~/.bashrc` から読込) を推奨。
-
-### トラブル対処の参照先
-
-詳細は各 docs/ または SKILL.md にあり、ここはインデックスのみ:
-
-- **vLLM Qwen が OOM** → [`docs/setup/notes/phase2-trial.md`](docs/setup/notes/phase2-trial.md) (pre-quantized FP8 + `--cpu-offload-gb 6` 必須)
-- **Gemini の応答が空** → [`skills/gemini-review/SKILL.md`](skills/gemini-review/SKILL.md) (thinking モードで枯渇、`maxOutputTokens ≥ 8192`)
-- **API キー管理** → [`scripts/env-snippet.sh`](scripts/env-snippet.sh) (`~/.*_token` ファイル方式)
-- **HF DL がストール** → [`docs/setup/notes/phase2-trial.md`](docs/setup/notes/phase2-trial.md) (`HF_TOKEN` + `HF_HUB_ENABLE_HF_TRANSFER=1`)
-- **設計判断の根拠** → [`docs/adr/0001-multi-llm-development-workflow.md`](docs/adr/0001-multi-llm-development-workflow.md), [`docs/adr/0002-multi-model-test-generation.md`](docs/adr/0002-multi-model-test-generation.md)
-- **月次 ROI 更新** → [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) §8 + [`scripts/track-cost.sh`](scripts/track-cost.sh)
-- **Phase 7 (Distill / 量子化評価)** → [`docs/setup/notes/phase7-distill-eval.md`](docs/setup/notes/phase7-distill-eval.md), [`scripts/vllm-swap-to.sh`](scripts/vllm-swap-to.sh)
+- ローカル LLM (vLLM) 起動: [`docs/setup/local-llm.md`](docs/setup/local-llm.md)。API キーは `scripts/env-snippet.sh` (`~/.*_token` 方式)
+- よくある不具合 (vLLM OOM / Gemini 応答空 / HF DL ストール / Distill 評価) の対処は [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) と各 `SKILL.md` に集約
 
 ## 並列開発 (git worktree)
-タスクごとに git worktree を分離し、複数の Claude Code セッションで安全に並列開発する。
 
-### スキル一覧
-| スキル | 用途 | コマンド例 |
-|--------|------|-----------|
-| `/worktree-start` | worktree 作成 + タスク登録 (`--linear <ID>` で Issue 連携) | `/worktree-start feat-auth ユーザー認証 --linear ELM-123` |
-| `/worktree-list` | 全タスクの状況・衝突リスク確認 | `/worktree-list` |
-| `/worktree-finish` | マージ + worktree 削除 (Linear 自動 Done) | `/worktree-finish feat-auth` |
+タスクごとに worktree を分離し、安全に並列開発する。
 
-### 並列開発フロー（デフォルト: 単一セッション）
-1. `/worktree-start <タスク名> <説明>` で worktree 作成
-2. 同一セッション内で `cd <worktree path>` して作業（メインワークツリーでは直接コード変更しない原則は維持）
-3. 作業完了後、メインワークツリーに戻って `/worktree-finish` でマージ
+| スキル | 用途 |
+|--------|------|
+| `/worktree-start <名> <説明>` | worktree 作成 + タスク登録 (`--linear <ID>` で Issue 連携) |
+| `/worktree-list` | 全タスクの状況・衝突リスク確認 |
+| `/worktree-finish [名]` | マージ + worktree 削除 (Linear 自動 Done) |
 
-### 並列セッションを使う場合（独立タスクを同時進行する時のみ）
-- 真に並列化したい時だけ別セッションを起動: `cd <worktree path> && claude --remote-control "<タスク名>"`
-- `--remote-control` を付けると iPhone 公式 Claude アプリの Code タブから push 通知・接続切替が可能 (Pro プラン以上必須)
-- `/worktree-start` の最終案内が自動でこの起動コマンドを表示する (Remote Control 不要なら `/worktree-start ... --no-remote`)
-- 依存関係のあるタスクや逐次進めるタスクは単一セッションで切り替えながら進める
-
-### タスクレジストリ
-- `<repo>/.git/parallel-tasks.json` に全タスク情報を記録
-- 全 worktree から共有参照できるため、どのセッションからでも `/worktree-list` で全体を俯瞰可能
-- 変更ファイルの重複がある場合は衝突リスクとして警告される
+- **デフォルトは単一セッション**: `/worktree-start` → 同一セッション内で `cd <worktree>` して作業 → メインに戻り `/worktree-finish`。メインワークツリーでは直接コード変更しない原則を維持
+- 真に並列化する独立タスクのみ別セッション: `cd <worktree> && claude --remote-control "<名>"` (Remote Control 不要なら `--no-remote`)
+- タスクレジストリは `<repo>/.git/parallel-tasks.json` に記録、全 worktree から共有参照
 
 ## Linear イシュー管理
 
-進捗・期日・ステークホルダー可視化は **Linear** に集約する。AI が読みやすい設計・決定ドキュメントは `docs/` に残し、コードレビューは GitHub PR を使う。各ツールの得意領域だけで運用し、重複を排除する。
+進捗・期日・ステークホルダー可視化は **Linear** に集約。設計・決定は `docs/`、コードレビューは GitHub PR。重複を排除する。
+セットアップ (MCP 登録): [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)
 
-### 役割分担
+### 役割分担 (何をどこに置くか)
 
 | 関心事 | 担当 |
 |---|---|
-| 期日・進捗・状態 (Todo/In Progress/Done, cycle) | **Linear** |
-| ステークホルダー可視化・優先度・ロードマップ | **Linear** |
-| Why (なぜそう決めたか) | `docs/adr/` |
+| 期日・進捗・状態・優先度・ロードマップ | **Linear** |
+| Why (なぜ決めたか) | `docs/adr/` |
 | How (動作・状態機械) | `docs/architecture/` |
 | What (詳細仕様・実装計画) | `docs/design/` |
 | コード・差分・レビュー | GitHub PR |
 | AI セッション文脈 | memory |
-| worktree のローカル状態 | `parallel-tasks.json` |
 
-**重複禁止**: Linear Issue description には「短い要約 + docs/design/foo.md へのリンク」だけ書く。本文は docs に。
+**重複禁止**: Linear Issue description は「短い要約 + docs/design/foo.md へのリンク」のみ。本文は docs に。**Linear の Docs/Wiki 機能は使わない** (AI 摩擦・vendor lock-in)。
 
-### Linear 内の構造
+### スキルと構造
 
-- **Project** = 多段階タスク (Phase 1-N のリファクタなど)。期日と進捗率を持つ
-- **Issue** = 1 worktree = 1 PR の粒度
-- **サブ Issue** = Project 内の Phase。parent-child で表現
+| スキル | 用途 |
+|--------|------|
+| `/linear-status` | Project / Issue / cycle の現状表示 |
+| `/linear-issue` | Issue の作成・表示・状態変更 |
+| `/linear-plan` | Project + サブ Issue を一括作成 (大規模計画用) |
 
-### 相互リンク
+- **Project** = 多段階タスク / **Issue** = 1 worktree = 1 PR / **サブ Issue** = Phase
+- 相互リンク: branch `worktree/<linear-id>-<task>` (PR 自動紐付け) / commit `feat: ... (ELM-123)` / docs 冒頭 `- Linear: ELM-123`
+- 運用フロー: `docs/design/foo.md` → `/linear-plan` → `/worktree-start <名> --linear <ID>` (In Progress) → 実装 → PR → `/worktree-finish` (Done)
 
-- Branch 名: `worktree/<linear-id-lowercase>-<task-name>` → Linear が PR を自動紐付け
-- Commit message: `feat: ... (ELM-123)`
-- docs/design/*.md 冒頭: `- Linear: ELM-123`
-- Linear Issue description: `docs/design/foo.md` への GitHub blob URL
+## Notion 連携 (人間共有用)
 
-### スキル一覧
+人間相手の共有ドキュメント (会議資料・議事録・顧客提出物・ステータス共有・オンボーディング) に Notion を併用する。設計図は in-repo (ADR-0001) のまま。
+根拠: [`docs/adr/0003`](docs/adr/0003-notion-for-human-shared-docs.md) / セットアップ・MCP tool・書き込み時のクセ: [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)
 
-| スキル | 用途 | コマンド例 |
-|--------|------|-----------|
-| `/linear-status` | Project / Issue / cycle の現状表示 | `/linear-status`, `/linear-status --mine` |
-| `/linear-issue` | Issue の作成・表示・状態変更 | `/linear-issue create "Phase 6 着手"`, `/linear-issue done ELM-106` |
-| `/linear-plan` | Project + サブ Issue を一括作成 (大規模計画用) | `/linear-plan "apps/batch test refactor" --design test-refactor-plan.md` |
-
-worktree との統合は `/worktree-start <name> --linear <ID>` で行う (Issue を In Progress に遷移、`/worktree-finish` で Done に遷移)。
-
-### 初回セットアップ
-
-各マシンで 1 回だけ実行:
-
-```bash
-claude mcp add --transport http --scope user linear https://mcp.linear.app/mcp
-# Claude Code セッション内で /mcp linear → OAuth 認証
-```
-
-> **注記**: 旧 `--transport sse https://mcp.linear.app/sse` は 2026-04-08 で deprecated。既に SSE で登録済みの場合は `claude mcp remove linear -s user` してから上記コマンドで再登録する。
-> 移行ガイド: https://linear.app/docs/mcp
-
-### 運用フロー
-
-1. 新計画 → `docs/design/foo.md` を書く → `/linear-plan` で Project + サブ Issue 作成
-2. Phase 着手 → `/worktree-start <name> --linear <ID>` で worktree 作成 + Issue を In Progress
-3. 実装 → コミット message に Issue ID 埋め込み (`feat: ... (ELM-123)`)
-4. PR → branch 名から Linear が自動で PR を紐付け
-5. マージ → `/worktree-finish` が Issue を Done に遷移
-
-### Linear Docs は使わない
-
-ドキュメント本体は `docs/` (Markdown) に置く。Linear の **Docs/Wiki 機能** は AI 摩擦・vendor lock-in のため採用しない (Issue 管理のみ Linear を使う)。
-
-## Notion 連携 (人間共有用、ADR-0003)
-
-ADR-0001 を「**設計図は in-repo**」に限定して再解釈し、**人間相手の共有ドキュメント**には Notion を併用する。Notion MCP server (公式、HTTP + OAuth) を Claude Code から叩く。
-
-### 役割分担 (ドキュメント置き場所)
-
-| 種別 | 置き場所 |
-|---|---|
-| ADR / architecture / design / setup notes | `docs/` (in-repo Markdown) — primary |
-| Issue 管理 | Linear |
-| **会議資料 / 議事録** | **Notion** Meeting Notes database |
-| **顧客提出物 / 提案書** | **Notion** Customer Deliverables database |
-| **ステータス共有 (週次/月次)** | **Notion** Weekly Status page |
-| **オンボーディング資料** | **Notion** Onboarding page |
-
-### 重複禁止ルール
-
-同じ内容を docs/ と Notion の両方に置かない。各情報の primary owner を 1 つに決め、もう一方からは link する。
-
-- 設計 / ADR の **why/how/what** は docs/ が primary、Notion からは GitHub blob URL でリンク
-- 議事録 / 会議メモは Notion が primary、決定事項を docs/adr/ に昇格する場合は「(議事録: Notion URL)」と注記
-- ステータス共有は Notion が primary、内容は Linear Issue から引用
-
-### セットアップ
-
-各マシンで 1 回だけ:
-
-```bash
-claude mcp add --transport http --scope user notion https://mcp.notion.com/mcp
-# Claude Code セッション内で /mcp notion → OAuth 認証 (ブラウザが開く)
-```
-
-### 主要 MCP tool
-
-| Tool | 用途 |
-|---|---|
-| `notion-fetch` | 既存ページ取得 (URL or ID 直指定、Notion AI 不要) |
-| `notion-create-pages` | 新規ページ作成 (parent ページ or database を指定) |
-| `notion-update-page` | プロパティ・本文の更新 |
-| `notion-create-comment` | ページにコメント追加 |
-| `notion-search` | キーワード検索 (**Notion AI 課金必須**、当面使わない) |
-
-### AI から Notion へ書く時のクセ
-
-- Markdown と完全互換ではない (block 構造)。**平文 + paragraph / heading / bullet list** のみで書く
-- 複雑なレイアウト (カラム、トグル、callout) は人間が手動編集
-- **重要な決定は必ず docs/adr/ に残してから** Notion にコピー (逆順禁止)
-- 機密案件のコード断片 / 内部 token を Notion に貼らない
-
-### 注意事項
-
-- Notion MCP の権限は OAuth ユーザの権限を継承 (個別ページ制限なし)。共有範囲は Notion 側のページ共有設定で管理
-- `notion-search` (= Notion AI) は当面使わず、`notion-fetch` で URL 直指定する
-- rate limit: 180 req/min (search は 30 req/min)
-- 月次評価 (`docs/design/ai-workflow.md` §8 と同期) で「Notion 重複ドリフト」を点検
+**重複禁止**: 同じ内容を docs/ と Notion の両方に置かない。設計/ADR は docs/ が primary (Notion からは GitHub blob URL でリンク)、議事録は Notion が primary (決定事項を docs/adr/ に昇格時は「(議事録: Notion URL)」と注記)。
 
 ## ドキュメント・図式
 
-設計と実装の可視化は **in-repo Markdown + Mermaid** を基盤とする。Notion / Confluence / Linear Docs などの SaaS には設計図を置かない（vendor lock-in、AI 摩擦、コード/ドキュメント分断のため）。
-
-### 構造規約
-
-各リポジトリの `docs/` 配下に以下の構造で配置する。雛形は `agent-rules/templates/docs/`。
+設計と実装の可視化は **in-repo Markdown + Mermaid** が基盤 (Mermaid で不足なら D2)。Notion / Confluence / Linear Docs / バイナリ画像は設計図に使わない。
+根拠: [`docs/adr/0004`](docs/adr/0004-deliberate-design-bias.md) / 構造の雛形: `agent-rules/templates/docs/`
 
 | ディレクトリ | 内容 |
 |--------|------|
-| `docs/adr/` | Architecture Decision Records（なぜ・何を決めたか） |
-| `docs/architecture/` | C4 model + 状態/シーケンス/依存図（どう動くか） |
-| `docs/design/` | 実装計画・仕様（これから何をどう作るか） |
+| `docs/adr/` | Architecture Decision Records (なぜ・何を決めたか) |
+| `docs/architecture/` | C4 model (L1 Context → L4 Code) + 状態/シーケンス/依存図 |
+| `docs/design/` | 実装計画・仕様 |
 
-### スキル一覧
+| スキル | 用途 |
+|--------|------|
+| `/docs-init` | 新プロジェクトに docs/ 標準構造を展開 |
+| `/docs-visualize` | C4 + 状態機械 + シーケンスで可視化 |
+| `/adr-new <題>` | 通し番号自動採番で ADR 作成 |
 
-| スキル | 用途 | コマンド例 |
-|--------|------|-----------|
-| `/docs-init` | 新プロジェクトに docs/ 標準構造を展開 | `/docs-init` |
-| `/docs-visualize` | C4 + 状態機械 + シーケンスで可視化 | `/docs-visualize`, `/docs-visualize --scope auth` |
-| `/adr-new` | 通し番号自動採番で ADR を作成 | `/adr-new プラットフォーム選定` |
+- **ADR 運用**: ファイル名 `NNNN-kebab-case.md` (欠番なし)、採択済みは書き換えず新規 ADR で Supersede、採択日は ISO 形式
+- **更新順**: ADR (なぜ) → architecture (どう動くか) → コード (実装)。図が drift しないよう注意
+- 人間がコピペするプロンプト雛形は [`prompts/docs-visualize.md`](prompts/docs-visualize.md)
 
-### 関連プロンプト
+## デザイン個性付け (AIっぽさ回避)
 
-人間が手元でコピペするためのプロンプト雛形は `agent-rules/prompts/` に置く:
+生成 AI の UI/スライドが median (青紫グラデ・glassmorphism・Inter 既定…) に収束する問題を、意図的に偏らせたデザイン DNA の注入で解く。
+根拠: [`docs/adr/0004`](docs/adr/0004-deliberate-design-bias.md) / 内部: `skills/design-voice/` (`anti-tells.md`, `scripts/ai_smell_lint.py`)
 
-- [`prompts/docs-visualize.md`](prompts/docs-visualize.md) — 新プロジェクトで可視化を依頼するときのコピペ用文面 (最短版・フル版・自然言語トリガー・トラブルシュート付き)
+| スキル | 用途 |
+|--------|------|
+| `/design-voice extract` | 参照例から個性を抽出しプロファイル生成 |
+| `/design-voice use` | プロファイルを context 注入 (ソフト適用) |
+| `/design-voice critic` | 「AI臭スコア」採点 + 閾値未満まで再生成 (ハード、a11y ガードレール必須) |
 
-### ADR 運用ルール
-
-- ファイル名: `NNNN-kebab-case-title.md`（4 桁ゼロ埋め、欠番なし）
-- 採択した ADR は **書き換えない**。変更は新規 ADR で旧 ADR を Supersede する
-- 採択日は ISO 形式（`YYYY-MM-DD`）
-- 関連 ADR は相互リンクで参照
-
-### 図式の方針
-
-- **Mermaid を第一選択**（GitHub がネイティブレンダリング、Claude が完全に書ける）
-- Mermaid で表現力が足りない場合に **D2** を補完的に利用
-- 採用しない: Notion / Confluence / Linear Docs / 設計図のバイナリ画像
-
-### C4 model レベルの使い分け
-
-| レベル | 推奨ファイル | 用途 |
-|--------|--------------|------|
-| L1 Context | `0-context.md` | システム境界、外部との関係 |
-| L2 Container | `1-containers.md` | アプリ内の主要要素 |
-| L3 Component | `2-components.md` | Container 内の結線 |
-| L4 Code | （必要時のみ） | クラス図など |
-
-補足図（状態機械、シーケンス、データフロー、依存）は L2/L3 と並べて配置する。
-
-### 更新順
-
-設計変更時は **ADR（なぜ）→ architecture（どう動くか）→ コード（実装）** の順で更新する。図がコードから drift しないよう注意する。
-
-## デザイン個性付け (AIっぽさ回避、ADR-0004)
-
-生成AIの UI モック・スライドが median（青紫グラデ・glassmorphism・Inter 既定・絵文字アイコン・対称3カラム…）に収束し「一目でAI製」になる問題を、**意図的に偏らせたデザインDNAの注入**で解く。参照例から個性を抽出してプロファイル化し、生成時に注入（ソフト）、仕上げに批評ループで矯正（ハード）する。
-
-### スキル一覧
-
-| スキル | 用途 | コマンド例 |
-|--------|------|-----------|
-| `/design-voice extract` | 参照例(URL/画像/コード)から個性を抽出しプロファイル生成 | `/design-voice extract https://... --name editorial-mono` |
-| `/design-voice use` | プロファイルを context 注入(ソフト適用)+ 発散 seed | `/design-voice use editorial-mono`, `/design-voice use --list` |
-| `/design-voice critic` | 生成物の「AI臭スコア」採点 + 閾値未満まで再生成(ハード) | `/design-voice critic dist/ --threshold 30` |
-
-- プロファイルは `skills/design-voice/profiles/<name>/`(`dna.md` + `tokens.json` + `references/`)。同梱実例は `editorial-mono`
-- 共通ブロックリストは `skills/design-voice/anti-tells.md`、機械 lint は `skills/design-voice/scripts/ai_smell_lint.py`
-- 軽微な用途は `use` のソフト適用のみ。仕上げ・量産時に `critic` を回す（a11y ガードレール必須）
+軽微な用途は `use` のソフト適用のみ。仕上げ・量産時に `critic` を回す。
 
 ## シェル環境 (モダン CLI ツール)
 
-Rust 製モダン CLI ツール (`rg`, `fd`, `bat`, `eza`, `dust`, `btm`, `procs`, `delta`, `sd`, `hyperfine`, `tldr`, `jless`, `tokei`, `zoxide`) を覚えきれず使えていない問題を解消するための仕組み。
+Rust 製モダン CLI (`rg`, `fd`, `bat`, `eza`, `dust`, `btm`, `procs`, `delta`, `sd`, `hyperfine`, `tldr`, `jless`, `tokei`, `zoxide`) を使いこなすための仕組み。
 
-### スキル一覧
-
-| スキル | 用途 | コマンド例 |
-|--------|------|-----------|
-| `/cli-help` | モダン CLI ツールの使い方を即引き (旧コマンド名でも逆引き可) | `/cli-help rg`, `/cli-help grep` |
-
-### シェル側の機能
-
-`install.sh` が `~/.bashrc` に `source $HOME/.claude/skills/cli-help/bash.sh` を追記する。これで以下が有効化される:
-
-- **`cheat <tool>`**: チートシートを即引きする bash 関数。引数なしで全文、引数ありで該当セクション抜粋。`cheat -i` で fzf 対話選択。
-- **soft reminder**: `grep / find / cat / top / du / sed / ps` を関数でラップ。セッションごとに 1 回だけ「これを試してみては」と dim yellow で stderr に hint を出してから本物を実行する。`command grep ...` でバイパス可能。
-- 全停止: `export MODERN_CLI_HINTS=0` を `~/.bashrc` に追記すると関数ラップ自体が定義されない (cheat は使える)。
-
-### 推奨ツールのインストール
-
-不足分は `bash ~/repos/github.com/elm-inc/agent-rules/scripts/install-modern-cli.sh` で cargo 経由で一括導入。`install.sh` 本体には含めない (cargo build が長いため)。
-
-### 設計 Tips (将来再検討時の判断材料)
-
-- **エイリアス上書き (`alias grep=rg` 等) はしない**。rg と grep は再帰デフォルト・gitignore 認識など挙動差があり、スクリプトの動作を壊す。関数ラップ + `command grep` バイパスのほうが安全。
-- **`ls` は wrap 対象から外している**。発火頻度が高すぎて hint が心理的負荷になるため。早見表に逆引きを残し、能動的に `cheat eza` で参照する運用。
+- `/cli-help <tool>` で使い方を即引き (旧コマンド名でも逆引き可)。シェルでは `cheat <tool>` 関数 + soft reminder (`grep`/`find`/`cat` 等を関数ラップ、`command grep` でバイパス)
+- 仕組みの有効化は `install.sh` が `~/.bashrc` に追記。全停止は `export MODERN_CLI_HINTS=0`
+- 推奨ツールの一括導入: `bash scripts/install-modern-cli.sh` (cargo 経由、`install.sh` 本体には含めない)
 
 ## このリポジトリ (agent-rules) の運用
 
-`agent-rules` リポは **ルール・テンプレート・スキルの単一ソース**。各マシンの `~/CLAUDE.md`, `~/RULES.md`, `~/AGENTS.md`, `~/.claude/skills/*` は本リポへの symlink で同期する。
-
-### 新マシン or 再セットアップ
+`agent-rules` は **ルール・テンプレート・スキルの単一ソース**。各マシンの `~/CLAUDE.md`, `~/RULES.md`, `~/AGENTS.md`, `~/.claude/skills/*` は本リポへの symlink で同期する。
 
 ```bash
 git clone https://github.com/elm-inc/agent-rules ~/repos/github.com/elm-inc/agent-rules
-~/repos/github.com/elm-inc/agent-rules/install.sh
+~/repos/github.com/elm-inc/agent-rules/install.sh   # idempotent。既存 symlink はスキップ
 ```
 
-`install.sh` は idempotent。既存 symlink はスキップ、不足分だけ追加する。
-
-### 改善の反映
-
-- 仕様や運用の改善は agent-rules リポへの PR ベースで行う
-- 採用された改善は他マシンで `git pull` + `install.sh` で同期される
-- 大きな方針変更は ADR として残す（このリポ自身も `docs/adr/` を持つ）
+- 改善は本リポへの PR ベース。採用後は他マシンで `git pull` + `install.sh` で同期
+- 大きな方針変更は ADR として残す (このリポ自身も `docs/adr/` を持つ)
