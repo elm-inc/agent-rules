@@ -4,13 +4,15 @@
 
 ## AI 開発ワークフロー (多層・多モデル)
 
-実装は Claude Opus 4.7、レビュー・検証・テスト生成は **複数 LLM の役割分担 + 機械検証** で多層化する。同じ間違いをしないよう、Anthropic/OpenAI 系に偏らせず Gemini・DeepSeek・ローカル LLM を混ぜる。
+実装は Claude Opus 4.8、レビュー・検証・テスト生成は **複数 LLM の役割分担 + 機械検証** で多層化する。同じ間違いをしないよう、Anthropic/OpenAI 系に偏らせず Gemini・DeepSeek・ローカル LLM を混ぜる。最上位の Claude Fable 5 は高難度タスク限定でサブエージェント委譲する (下記「モデル使い分け」)。
 
 ### 役割分担
 
 | ロール | モデル / ツール | スキル |
 |---|---|---|
-| 実装 (主) | Claude Opus 4.7 | (Claude Code 本体) |
+| 実装 (主) | Claude Opus 4.8 | (Claude Code 本体) |
+| 高難度実装・設計 (委譲) | Claude Fable 5 (subagent) | `/fable-task` |
+| 最終レビュー (最高精度・限定使用) | Claude Fable 5 (subagent) | `/fable-review` |
 | 0 次レビュー (高速・無料) | ローカル Qwen2.5-Coder-32B (vLLM, FP8) | `/local-review` |
 | セカンドオピニオン (異種ベンダー) | Codex (GPT-5) | `/codex-review`, `/codex-task`, `/codex-audit` |
 | 設計レッドチーム (思考連鎖) | DeepSeek-R1 (API) | `/deepseek-redteam` |
@@ -19,6 +21,22 @@
 | テスト実装 | Qwen-Coder-32B FP8 (主) | `/test-generate --implement` または引数なし旧挙動 |
 | テストデータ生成 | Qwen (バッチ推論) | `/test-data` |
 | 機械検証 | pre-commit hooks (ruff/mypy/semgrep/type-check) | (各リポで設定) |
+
+### モデル使い分け (Opus 4.8 / Fable 5)
+
+常用 (セッションモデル) は **Opus 4.8**。Fable 5 は $10/$50 per MTok で Opus の 2 倍のため、Max プラン上限の消費が約 2 倍速い。デフォルトでは使わず、以下に該当するタスクを検知したら **Claude が自分で判断して** Fable 5 サブエージェントに委譲する (委譲前に一言宣言する):
+
+| 該当条件 | 使うスキル |
+|---|---|
+| アーキテクチャ・設計判断で選択肢が拮抗し、誤ると手戻りが大きい (ADR の比較検討など) | `/fable-task` |
+| 10+ ファイルを跨ぐ大規模リファクタ・新機能の計画/実装 | `/fable-task` |
+| 一度修正を試みて失敗した原因不明のバグ調査 | `/fable-task` |
+| セキュリティ・認証・課金・データ破壊リスクに関わる変更の最終レビュー | `/fable-review` |
+| 大規模変更のマージ前最終確認、他レビュー段で意見が割れた差分 | `/fable-review` |
+
+- 該当しない通常タスク・軽微な修正・調査はセッションモデルで直接実施する
+- 委譲はサブエージェント単位で行う (セッション全体を Fable にしない)。セッション全体を切り替えたい場合のみユーザーが `/model fable` を実行する
+- Fable 5 への委譲は完全な仕様を最初に一括で渡す (細切れの往復はコストも品質も悪化する)
 
 ### スキル一覧
 
@@ -32,6 +50,8 @@
 | `/gemini-review` | リポ横断・ADR 整合性レビュー (1M context) | `/gemini-review --scope apps/web` |
 | `/test-generate` | テストケース列挙 + 実装生成 (2 モード対応、ADR-0002) | `/test-generate src/utils/date.ts:format`, `/test-generate ... --brainstorm`, `/test-generate ... --implement <観点ファイル>` |
 | `/test-data` | 業務的に妥当なテストデータ生成 | `/test-data app/models/user.py:User --count 50` |
+| `/fable-task` | 大規模・高難易度タスクを Fable 5 に委譲 | `/fable-task 認証基盤を OAuth2 に移行（前提・制約・完了条件を記載）` |
+| `/fable-review` | Fable 5 による最終レビュー (限定使用) | `/fable-review --base main`, `/fable-review セキュリティ観点で` |
 
 ### コミット時のフロー (推奨)
 
@@ -42,7 +62,7 @@
    └→ (任意) /codex-audit で実装視点ツッコミ
 
 [実装]
-  Opus 4.7 で実装
+  Opus 4.8 で実装 (高難度は /fable-task で Fable 5 に委譲)
 
 [コミット前]
   /local-review                      ← 0 次 (秒)
@@ -50,6 +70,7 @@
   (必要時) /test-generate            ← テスト追加
   /codex-review                      ← セカンドオピニオン
   (必要時) /gemini-review            ← リポ横断
+  (高リスク変更のみ) /fable-review   ← Fable 5 最終レビュー
 
 [実行検証]
   /verify (Claude Code 標準スキル), E2E
