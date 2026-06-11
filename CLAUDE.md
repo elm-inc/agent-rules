@@ -50,6 +50,28 @@
 
 **迷ったら**: 影響範囲が広い / 正しさが重要 / 品質が下流に波及するタスクは Fable に回してよい。逆に**局所的・機械的・低リスク**なタスク (定型修正、リネーム、軽微なバグ、調査の一次あたり) は Opus のまま。委譲はサブエージェント単位で行い (セッション全体を Fable にしない)、完全な仕様を最初に一括で渡す。セッション全体を切り替えたい場合のみユーザーが `/model fable` を実行する。
 
+### 標準オーケストレーション (大規模開発)
+
+複数モデルを組み合わせて大規模タスクを進める時の基本形。**司令塔は必ずメインセッションの Claude** (通常 Opus 4.8)。Codex / DeepSeek / Gemini / Qwen はスキル経由で呼ぶ「ツール」であり、司令塔にはならない。
+
+| モデル | 役割 |
+|---|---|
+| **Opus 4.8 = 司令塔** | 計画・分解・分配・統合・実装の主。トークン最多のセッションを 1x コストに保つ |
+| **Fable 5 = 両端の専門脳** | 全体設計/分解の起草 (要所) と高リスク変更の最終レビュー (`/fable-task`・`/fable-review` subagent) |
+| **Codex = 異種ベンダーの横やり + 独立系統の並列実装** | 盲点ヘッジ + 別系統を丸ごと委譲して真の並列化 (`/codex-task`・`/codex-review`) |
+| **DeepSeek-R1 / Gemini = レッドチーム / リポ横断整合** | 設計の破綻炙り (`/deepseek-redteam`) と 1M context での全体整合 (`/gemini-review`) |
+| **Qwen + pre-commit = 床** | 0 次レビュー (`/local-review`) と機械検証の最前段フィルタ |
+
+```
+[設計] Fable 起草 → /deepseek-redteam で redteam → (必要なら) /gemini-review で横断整合
+[実装] Opus 司令塔、worktree で並列分解:
+        難所→Fable subagent (/fable-task) / 独立系統→Codex 委譲 (/codex-task) / 大半→Opus 自身
+[レビュー] /local-review (0次) → pre-commit (機械) → /codex-review (異種)
+          → (10+ファイル/drift 疑い) /gemini-review → (高リスクのみ) /fable-review (最終)
+```
+
+**例外**: 単発・完全自律の超高難度ミッション (一晩でサブシステム移行など) は、Fable を司令塔にして `/model fable` で走らせる方が良い (完全な仕様を一括投入し long-horizon 自律を活かす。コストは割り切る)。対話的・多段の大規模開発は上記の Opus 司令塔型が勝る。
+
 ### コミット時のフロー (推奨)
 
 ```
