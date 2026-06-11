@@ -2,6 +2,7 @@
 # Install / refresh symlinks for agent-rules:
 # - top-level rules: CLAUDE.md, RULES.md, AGENTS.md
 # - Claude skills: ~/.claude/skills/*
+# - Claude subagents: ~/.claude/agents/*
 # - Codex skills: ~/.codex/skills/*
 # - Codex profile-v2 config layers: ~/.codex/*.config.toml
 #
@@ -53,6 +54,15 @@ mkdir -p "$HOME/.claude/skills"
 for skill_dir in "$REPO_DIR"/skills/*/; do
     skill_name="$(basename "$skill_dir")"
     ln_if_not "$REPO_DIR/skills/$skill_name" "$HOME/.claude/skills/$skill_name"
+done
+
+echo ""
+echo "== Claude subagents =="
+mkdir -p "$HOME/.claude/agents"
+for agent_file in "$REPO_DIR"/agents/*.md; do
+    [ -e "$agent_file" ] || continue
+    agent_name="$(basename "$agent_file")"
+    ln_if_not "$REPO_DIR/agents/$agent_name" "$HOME/.claude/agents/$agent_name"
 done
 
 echo ""
