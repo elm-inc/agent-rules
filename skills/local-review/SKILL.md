@@ -3,7 +3,7 @@ name: local-review
 description: ローカル LLM (Qwen2.5-Coder-32B / vLLM) で差分の0次レビューを行う。コミット直前の雑なミス検出に使う。/codex-review より前段で安価・高速。秒オーダーで終わる
 argument-hint: "[対象指定（例: --base main, --uncommitted, --commit <sha>） + 追加観点]"
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *)
+allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(bash *)
 ---
 
 # ローカル LLM による 0 次コードレビュー
@@ -12,11 +12,9 @@ Qwen2.5-Coder-32B (vLLM) で差分を高速レビューする。`/codex-review` 
 
 ## 前提
 
-- vLLM が `$LOCAL_LLM_BASE_URL` (デフォルト `http://localhost:8000/v1`) で稼働していること
-- セットアップ: [`docs/setup/local-llm.md`](../../docs/setup/local-llm.md)
-- 稼働確認: `curl -s "$LOCAL_LLM_BASE_URL/models" | jq .`
-
-未稼働ならユーザーに知らせて中止する。`/codex-review` を代替案として案内する。
+- vLLM は**オンデマンド起動**。常駐させず、本スキルが `ensure-vllm.sh` で必要時のみ起動する (アイドル後は自動停止し GPU を解放)
+- セットアップ・運用方式: [`docs/setup/local-llm.md`](../../docs/setup/local-llm.md)、設計判断: [`docs/adr/0005`](../../docs/adr/0005-on-demand-local-llm.md)
+- 起動に失敗した場合 (GPU が他プロセスで使用中など) はユーザーに知らせて中止し、`/codex-review` を代替案として案内する
 
 ## 引数の解釈
 
@@ -30,18 +28,22 @@ Qwen2.5-Coder-32B (vLLM) で差分を高速レビューする。`/codex-review` 
 
 ## 実行手順
 
-### 1. vLLM の稼働確認
+### 1. vLLM の起動保証 (オンデマンド)
+
+`ensure-vllm.sh` を呼ぶ。稼働中なら即進行、未稼働なら起動して healthy まで待機する (初回ロードは 1-2 分)。起動後はアイドル監視が常駐し、一定時間 (デフォルト 15 分) 使われなければ自動停止して GPU を解放する。
 
 ```bash
 MODEL_NAME="${LOCAL_LLM_MODEL:-qwen-coder}"
 BASE_URL="${LOCAL_LLM_BASE_URL:-http://localhost:8000/v1}"
 
-if ! curl -sf "$BASE_URL/models" > /dev/null; then
-  echo "ERROR: vLLM が $BASE_URL で稼働していません"
-  echo "docs/setup/local-llm.md の手順でサーバを起動してください"
+if ! bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh; then
+  echo "ERROR: vLLM を起動できませんでした (GPU が他プロセスで使用中の可能性)"
+  echo "  → nvidia-smi で GPU を確認するか、/codex-review を代わりに使ってください"
   exit 1
 fi
 ```
+
+> 初回起動の待機が長い場合や、すぐ GPU を空けたい場合は `bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh stop` で即停止できる。
 
 ### 2. 差分の取得
 

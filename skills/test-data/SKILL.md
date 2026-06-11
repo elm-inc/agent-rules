@@ -3,7 +3,7 @@ name: test-data
 description: スキーマ・型定義 (Pydantic / TypeScript / DB schema) から、業務的に妥当なテストデータ・factory・fixture を生成する。faker と違い「入社日が退職日より前」のような関係制約も LLM が補完する。大量生成はローカル LLM のバッチ推論で行う
 argument-hint: "<スキーマファイル or 型名> [--count <N>] [--format factory|fixture|json]"
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Read Write
+allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(bash *) Read Write
 ---
 
 # 業務的に妥当なテストデータ生成
@@ -12,9 +12,9 @@ allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash
 
 ## 前提
 
-- ローカル: vLLM が稼働 (`$LOCAL_LLM_BASE_URL`)
+- ローカル vLLM は**オンデマンド起動** — Qwen を使う前に `ensure-vllm.sh` で起動保証する (常駐させず、アイドル後は自動停止)
 - 大量生成 (>100) はローカルのバッチ推論で行う (クラウドだとコスト・速度が劣る)
-- セットアップ: [`docs/setup/local-llm.md`](../../docs/setup/local-llm.md)
+- セットアップ・運用方式: [`docs/setup/local-llm.md`](../../docs/setup/local-llm.md)、設計判断: [`docs/adr/0005`](../../docs/adr/0005-on-demand-local-llm.md)
 
 ## 引数の解釈
 
@@ -133,6 +133,9 @@ find . -type d \( -name "factories" -o -name "fixtures" -o -name "__fixtures__" 
 ### 4. Qwen (vLLM) 呼び出し
 
 ```bash
+# オンデマンド起動 (未稼働なら起動して待機、アイドル後は自動停止)
+bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh || { echo "vLLM を起動できませんでした"; exit 1; }
+
 PAYLOAD=$(jq -n --arg model "${LOCAL_LLM_MODEL:-qwen-coder}" --arg content "$PROMPT" \
   '{model:$model, messages:[{role:"user", content:$content}], temperature:0.6, max_tokens:16384}')
 

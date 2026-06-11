@@ -2,6 +2,9 @@
 
 本ドキュメントは、`/local-review` `/test-generate` `/test-data` 等のローカル LLM 系スキルが前提とする推論サーバの構築手順を示す。
 
+> **運用方式: オンデマンド起動が既定 (ADR-0005, 2026-06-11)**
+> vLLM は常駐させず、ローカル LLM スキルが必要時に `scripts/ensure-vllm.sh` で起動し、アイドル後に自動停止して GPU を解放する。詳細は下記「オンデマンド運用」を参照。常駐 (boot 自動起動) は高頻度利用マシン向けの opt-in に変更。
+
 ## ハードウェア前提
 
 - **GPU**: RTX PRO 4500 Blackwell (32GB GDDR7, FP4/FP8 ネイティブ)
@@ -14,11 +17,11 @@
 
 | 用途 | モデル | 量子化 | 重量 | **実 VRAM (KV cache + overhead 込み)** |
 |---|---|---|---|---|
-| **常駐 (主力: コードレビュー、実装、テスト)** | `RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic` | FP8 | 18.14 GiB | ~28-30 GiB |
+| **主力 (コードレビュー、実装、テスト) — オンデマンド起動** | `RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic` | FP8 | 18.14 GiB | ~28-30 GiB |
 | swap 1 (高速ループ・観点抽出補助) | `Qwen/Qwen2.5-Coder-14B-Instruct-AWQ` | AWQ INT4 | 9.38 GiB | ~17.5 GiB |
 | swap 2 (機密案件レッドチーム) | `deepseek-ai/DeepSeek-R1-Distill-Qwen-14B` | online FP8 | 15.5 GiB | ~28.5 GiB |
 
-**重要**: 32GB VRAM では同時ロード不可 (Phase 1 ベンチで確定)。**A 案 (swap 方式) で運用**: 主力を常駐、swap 候補は要求時に `scripts/vllm-swap-to.sh` で一時起動 → 終了時に主力復帰。
+**重要**: 32GB VRAM では同時ロード不可 (Phase 1 ベンチで確定)。**A 案 (swap 方式) で運用**: 主力をオンデマンド起動 (ADR-0005)、swap 候補は要求時に `scripts/vllm-swap-to.sh` で一時起動 → 終了時に主力復帰。
 
 Phase 1 実測詳細: [docs/setup/notes/phase7-distill-eval.md](notes/phase7-distill-eval.md)
 
@@ -60,9 +63,50 @@ curl http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-### 3. systemd サービス化 (任意)
+### 3. systemd サービス化 (常駐させたい場合のみ、opt-in)
 
-`/etc/systemd/system/vllm-qwen.service` に上記 docker run を wrap した unit を置き、`systemctl enable --now vllm-qwen` で起動時自動起動。
+`/etc/systemd/system/vllm-qwen.service` に上記 docker run を wrap した unit を置き、`systemctl enable --now vllm-qwen` で起動時自動起動。**ただし既定はオンデマンド運用** (次セクション)。常駐は GPU を専有して構わない高頻度利用マシンでのみ選ぶ。
+
+## オンデマンド運用 (既定、ADR-0005)
+
+vLLM を常駐させず、ローカル LLM スキルが呼ばれた時だけ起動し、アイドル後に自動停止して GPU を解放する。GPU を他プロジェクトと共有するマシン向け。
+
+### 仕組み
+
+| スクリプト | 役割 |
+|---|---|
+| `scripts/ensure-vllm.sh` | 冪等な起動保証。稼働中なら即進行、未稼働なら起動して healthy まで待機。各ローカル LLM スキルが推論前に呼ぶ |
+| `scripts/vllm-idle-watch.sh` | アイドル監視。`vllm:prompt_tokens_total` を poll し、一定時間変化が無ければ `docker stop` で GPU 解放。`ensure-vllm.sh` が flock で 1 つだけ常駐させる |
+
+docker を直接管理するため **sudo 不要** (elmo が docker グループ所属)。コンテナ設定は常駐時と同一。
+
+### 常駐からの移行 (一度だけ)
+
+```bash
+# 現行の常駐 systemd を停止 + boot 自動起動を無効化 (sudo はここだけ)
+sudo systemctl disable --now vllm-qwen-coder
+
+# 以降はスキル実行時に自動起動される。手動で叩く場合:
+bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh          # 起動保証
+bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh status   # running / stopped
+bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh stop     # 即停止 (GPU 解放)
+```
+
+systemd unit ファイル自体は残すので、常駐に戻したくなったら `sudo systemctl enable --now vllm-qwen-coder` で復帰できる。
+
+### 主な環境変数 (`~/.bashrc`)
+
+```bash
+export VLLM_IDLE_MINUTES=15   # この分数アイドルで自動停止 (デフォルト 15)
+export VLLM_START_TIMEOUT=300 # 起動待ちタイムアウト秒 (デフォルト 300)
+# モデル/ポート等を変える場合: VLLM_MODEL / VLLM_PORT / VLLM_MAX_LEN / VLLM_GPU_MEM_UTIL / VLLM_CPU_OFFLOAD_GB / VLLM_HF_CACHE
+```
+
+### トレードオフ
+
+- アイドル後の**初回スキル実行はモデルロード待ち (1-2 分)**。連続実行・15 分以内の再実行はキャッシュ済みで即時
+- すぐ GPU を空けたい時は `ensure-vllm.sh stop`
+- 高頻度利用が常態化したら常駐 (systemd) に戻す選択も可
 
 ## 環境変数
 
