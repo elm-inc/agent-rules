@@ -3,7 +3,7 @@ name: test-generate
 description: テスト観点の列挙とテスト実装を生成する。--brainstorm で複数 LLM (DeepSeek-R1 + Qwen + 任意で Distill/Gemini) を並列実行して観点を多面化、--implement で観点ファイルからコード生成。引数なしは旧挙動 (列挙 + 実装を 1 ステップで、Qwen 単独)
 argument-hint: "<対象> [--brainstorm | --implement <観点ファイル>] [--with-distill] [--with-gemini] [--property] [--mutants <list>]"
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(flock *) Bash(docker *) Read Write Edit
+allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(flock *) Bash(docker *) Bash(bash *) Read Write Edit
 ---
 
 # テスト観点列挙 + 実装生成 (多モデル対応)
@@ -22,7 +22,7 @@ ADR-0002 採択により 2 モード化。**観点抽出** (拡散的タスク) 
 
 ## 前提
 
-- ローカル vLLM (`$LOCAL_LLM_BASE_URL`) が稼働 (常駐 Qwen-Coder-32B FP8)
+- ローカル vLLM (Qwen-Coder-32B FP8) は**オンデマンド起動** — Qwen を使う前に `ensure-vllm.sh` で起動保証する (常駐させず、アイドル後は自動停止)。詳細: [`docs/adr/0005`](../../docs/adr/0005-on-demand-local-llm.md)
 - `--brainstorm` デフォルト: `DEEPSEEK_API_KEY` 必須 (Distill ローカル化なら `--with-distill` で代替可)
 - `--with-distill`: vLLM swap で Distill-Qwen-14B online FP8 を一時起動 (Phase 3 で自動化予定)
 - `--with-gemini`: `GEMINI_API_KEY` 必須
@@ -116,7 +116,8 @@ if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
     | jq -r '.choices[0].message.content' > "$BRAINSTORM_TMP/r1.md"
 fi
 
-# 2. Qwen-Coder-32B FP8 (常駐、:8000)
+# 2. Qwen-Coder-32B FP8 (オンデマンド起動、:8000)
+bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh || { echo "vLLM を起動できませんでした"; exit 1; }
 curl -sf "${LOCAL_LLM_BASE_URL:-http://localhost:8000/v1}/chat/completions" \
   -H "Content-Type: application/json" \
   -d "$(jq -n --arg c "$PROMPT" --arg m "${LOCAL_LLM_MODEL:-qwen-coder}" '{model:$m, messages:[{role:"user", content:$c}], temperature:0.3, max_tokens:3000}')" \
@@ -144,13 +145,9 @@ if [ "$WITH_DISTILL" = "1" ]; then
     -d "$(jq -n --arg c "$PROMPT" '{model:"distill", messages:[{role:"user", content:$c}], temperature:0.3, max_tokens:5000}')" \
     | jq -r '.choices[0].message.content' > "$BRAINSTORM_TMP/distill.md"
 
-  # cleanup + 常駐復帰
+  # cleanup + Qwen 復帰 (オンデマンド: ensure-vllm.sh で再起動。--rm のため docker start は使わない)
   docker rm -f vllm-test
-  docker start vllm-qwen-coder
-  for i in $(seq 1 60); do
-    curl -sf http://localhost:8000/v1/models > /dev/null 2>&1 && break
-    sleep 5
-  done
+  bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh
 fi
 
 # 4. (--with-gemini) Gemini 2.5 Pro
