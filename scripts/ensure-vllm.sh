@@ -23,11 +23,14 @@
 #   VLLM_SERVED_NAME=qwen-coder  VLLM_MAX_LEN=4096  VLLM_GPU_MEM_UTIL=0.88
 #   VLLM_CPU_OFFLOAD_GB=6  VLLM_HF_CACHE=$HOME/.cache/huggingface
 #   VLLM_START_TIMEOUT=300 (秒)  VLLM_IDLE_MINUTES=15  VLLM_IDLE_POLL=60 (watcher へ継承)
+#   VLLM_IMAGE=vllm/vllm-openai:latest  ← 安定運用では版を pin 推奨 (例 :v0.21.0)。
+#     :latest のままでもメトリクス改名で watcher が誤停止しないよう idle-watch 側は fail-safe。
 set -uo pipefail
 
 PORT="${VLLM_PORT:-8000}"
 BASE_URL="http://localhost:${PORT}/v1"
 CONTAINER="vllm-qwen-coder"
+IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:latest}"
 MODEL="${VLLM_MODEL:-RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic}"
 SERVED_NAME="${VLLM_SERVED_NAME:-qwen-coder}"
 MAX_LEN="${VLLM_MAX_LEN:-4096}"
@@ -125,7 +128,7 @@ fi
       ${HUGGING_FACE_HUB_TOKEN:+-e HUGGING_FACE_HUB_TOKEN="$HUGGING_FACE_HUB_TOKEN"} \
       -e HF_HUB_ENABLE_HF_TRANSFER=1 \
       -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-      vllm/vllm-openai:latest \
+      "$IMAGE" \
       --model "$MODEL" \
       --max-model-len "$MAX_LEN" \
       --gpu-memory-utilization "$GPU_MEM_UTIL" \

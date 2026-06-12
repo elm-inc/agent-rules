@@ -25,7 +25,9 @@ systemd_managed() {
 }
 
 # prompt_tokens_total の合計 (engine ラベルが複数でも合算)。取得失敗時は前回値維持のため空を返す。
-activity() { curl -s -m 5 "$METRICS" 2>/dev/null | awk '/^vllm:prompt_tokens_total/{s+=$2} END{if(NR>0)print s+0}'; }
+# 該当行を 1 本も拾えなければ空を返す (メトリクス改名・取得失敗時に "0" と誤判定して停止しない fail-safe)。
+# m は一致行数。NR (全行数) だと改名時に s=0 のまま "0" を返して使用中でも停止してしまう。
+activity() { curl -s -m 5 "$METRICS" 2>/dev/null | awk '/^vllm:prompt_tokens_total/{s+=$2; m++} END{if(m>0)print s+0}'; }
 # 実行中リクエストが 1 件でもあれば 1 (括弧で囲まないと awk が `>` を出力リダイレクトと誤解釈する)
 running() { curl -s -m 5 "$METRICS" 2>/dev/null | awk '/^vllm:num_requests_running/{s+=$2} END{print ((s+0)>0?1:0)}'; }
 

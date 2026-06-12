@@ -99,8 +99,11 @@ systemd unit ファイル自体は残すので、常駐に戻したくなった�
 ```bash
 export VLLM_IDLE_MINUTES=15   # この分数アイドルで自動停止 (デフォルト 15)
 export VLLM_START_TIMEOUT=300 # 起動待ちタイムアウト秒 (デフォルト 300)
-# モデル/ポート等を変える場合: VLLM_MODEL / VLLM_PORT / VLLM_MAX_LEN / VLLM_GPU_MEM_UTIL / VLLM_CPU_OFFLOAD_GB / VLLM_HF_CACHE
+# export VLLM_IMAGE=vllm/vllm-openai:v0.21.0  # 安定運用では版を pin 推奨 (既定は :latest)
+# モデル/ポート等を変える場合: VLLM_MODEL / VLLM_SERVED_NAME / VLLM_PORT / VLLM_MAX_LEN / VLLM_GPU_MEM_UTIL / VLLM_CPU_OFFLOAD_GB / VLLM_HF_CACHE / VLLM_IDLE_POLL
 ```
+
+> vLLM image を `:latest` のまま使う場合でも、アイドル監視は対象メトリクス行が取得できないとき停止判断をスキップする (fail-safe) ので、メトリクス改名で使用中に誤停止することはない。安定性を最優先するなら `VLLM_IMAGE` で版を固定する。
 
 ### トレードオフ
 
@@ -246,14 +249,16 @@ bash ~/repos/github.com/elm-inc/agent-rules/scripts/migrate-hf-cache.sh
 - `/local-review` を 1 回実行して vLLM 動作確認
 - `~/models.legacy.*` を 1 ヶ月程度保持して問題なければ `sudo rm -rf` で削除
 
-AGENT-14 (systemd unit) を **install 済みなら**、unit ファイル
+AGENT-14 (systemd unit) を **install 済みで未移行パスのまま**なら、unit ファイル
 (`/etc/systemd/system/vllm-qwen-coder.service`) の `ExecStart` 行の
 `-v /home/elmo/models` を `-v /home/elmo/.cache/huggingface` に書き換えてから
 `sudo systemctl daemon-reload && sudo systemctl restart vllm-qwen-coder` を実行。
 
-(`templates/systemd/vllm-qwen-coder.service` の `-v` 行は AGENT-16 移行**前**を
-前提に旧パスのまま。AGENT-16 完了後に systemd unit を入れる場合はテンプレを
-sed で `s|/home/elmo/models|/home/elmo/.cache/huggingface|` した上で配置する。)
+(`templates/systemd/vllm-qwen-coder.service` の `-v` 行は AGENT-16 移行**後**の
+統一パス `/home/elmo/.cache/huggingface` を既定とする。オンデマンド (ensure-vllm.sh) と
+同一 cache を見るため、常駐 opt-in でも二重 DL は起きない。AGENT-16 **未移行**マシンで
+systemd unit を入れる場合のみ、テンプレを sed で
+`s|/home/elmo/.cache/huggingface|/home/elmo/models|` して旧パスに戻す。)
 
 ## トラブルシューティング
 

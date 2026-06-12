@@ -51,12 +51,13 @@ EnvironmentFile=/etc/vllm-qwen-coder.env
 ExecStartPre=-/usr/bin/docker stop vllm-qwen-coder
 ExecStartPre=-/usr/bin/docker rm vllm-qwen-coder
 
-# Phase 7 で HF cache 統一 (AGENT-16) 後は -v を /home/elmo/.cache/huggingface に変更
+# HF cache は AGENT-16 移行後の統一パス。オンデマンド (ensure-vllm.sh) と同一にし二重 DL を防ぐ。
+# AGENT-16 未移行マシンのみ -v を /home/elmo/models に sed で戻す。
 ExecStart=/usr/bin/docker run --rm \
   --name vllm-qwen-coder \
   --gpus all --ipc=host \
   -p 8000:8000 \
-  -v /home/elmo/models:/root/.cache/huggingface \
+  -v /home/elmo/.cache/huggingface:/root/.cache/huggingface \
   -e HUGGING_FACE_HUB_TOKEN \
   -e HF_HUB_ENABLE_HF_TRANSFER=1 \
   -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
