@@ -43,6 +43,7 @@ WATCH="${SCRIPT_DIR}/vllm-idle-watch.sh"
 WATCH_LOCK="/tmp/vllm-idle-watch.lock"   # /tmp 固定 (TMPDIR 変動で単一化が破れるのを防ぐ)
 WATCH_LOG="/tmp/vllm-idle-watch.log"
 START_LOCK="/tmp/vllm-ensure-start.lock"
+LEASE="/tmp/vllm-last-ensure"            # up 呼び出し=直近の利用意図。watcher が idle タイマーに反映 (TOCTOU 緩和)
 
 log() { echo "[ensure-vllm] $*" >&2; }
 healthy() { curl -sf -m 5 "${BASE_URL}/models" >/dev/null 2>&1; }
@@ -86,6 +87,10 @@ case "${1:-up}" in
 esac
 
 # --- up (デフォルト): 稼働保証 ---
+
+# up が呼ばれた = スキルが直後に推論する意図。watcher の idle 停止判定に効かせ、
+# healthy→exit 直後に watcher が docker stop する TOCTOU 窓を塞ぐ (M-3)。
+touch "$LEASE" 2>/dev/null || true
 
 # systemd 常駐管理下: 起動・停止・watcher に干渉せず healthy 確認のみ
 if systemd_managed; then

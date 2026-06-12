@@ -31,6 +31,11 @@ activity() { curl -s -m 5 "$METRICS" 2>/dev/null | awk '/^vllm:prompt_tokens_tot
 # 実行中リクエストが 1 件でもあれば 1 (括弧で囲まないと awk が `>` を出力リダイレクトと誤解釈する)
 running() { curl -s -m 5 "$METRICS" 2>/dev/null | awk '/^vllm:num_requests_running/{s+=$2} END{print ((s+0)>0?1:0)}'; }
 
+# ensure-vllm.sh が up 時に touch する lease の mtime (epoch 秒)。スキルの「直近の利用意図」。
+# healthy→exit 直後に停止してしまう TOCTOU を塞ぐ (M-3)。存在しなければ 0。
+LEASE="/tmp/vllm-last-ensure"
+lease_mtime() { stat -c %Y "$LEASE" 2>/dev/null || echo 0; }
+
 prev="$(activity)"
 last_active=$(date +%s)
 log "監視開始 (idle ${IDLE_MINUTES} 分で停止, poll ${POLL}s)"
@@ -50,7 +55,8 @@ while true; do
     continue
   fi
 
-  if [ "$cur" != "$prev" ] || [ "$(running)" = "1" ]; then
+  # メトリクス変化 / 実行中リクエスト / lease が last_active より新しい (= 直近に ensure 呼び出し) なら活動扱い
+  if [ "$cur" != "$prev" ] || [ "$(running)" = "1" ] || [ "$(lease_mtime)" -gt "$last_active" ]; then
     prev="$cur"
     last_active=$(date +%s)
     continue
