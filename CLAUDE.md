@@ -61,7 +61,7 @@
 | **Codex = 異種ベンダーの横やり + 独立系統の並列実装** | 盲点ヘッジ + 別系統を丸ごと委譲して真の並列化 (`/codex-task`・`/codex-review`) |
 | **DeepSeek-R1 / Gemini = レッドチーム / リポ横断整合** | 設計の破綻炙り (`/deepseek-redteam`) と 1M context での全体整合 (`/gemini-review`) |
 | **Qwen + pre-commit = 床** | 0 次レビュー (`/local-review`) と機械検証の最前段フィルタ |
-| **explorer / researcher = 探索・調査の床 (Haiku)** | コード探索・外部調査を安価なサブエージェントに委譲し本体の文脈とコストを節約 (`.claude/agents/`) |
+| **explorer / researcher = 探索・調査の床 (Haiku)** | コード探索・外部調査を安価なサブエージェントに委譲し本体の文脈とコストを節約 (`~/.claude/agents/`) |
 
 ```
 [設計] 受け入れ基準付きで仕様起草 (Fable, docs/design) → /deepseek-redteam で redteam

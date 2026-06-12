@@ -105,6 +105,12 @@ export VLLM_START_TIMEOUT=300 # 起動待ちタイムアウト秒 (デフォル�
 
 > vLLM image を `:latest` のまま使う場合でも、アイドル監視は対象メトリクス行が取得できないとき停止判断をスキップする (fail-safe) ので、メトリクス改名で使用中に誤停止することはない。安定性を最優先するなら `VLLM_IMAGE` で版を固定する。
 
+**環境変数の注意**:
+- `VLLM_PORT` を既定 (8000) から変える場合、スキル側が参照する `LOCAL_LLM_BASE_URL` (既定 `http://localhost:8000/v1`) も合わせて変える。両者は別系統なので片方だけ変えると食い違う。
+- `VLLM_IDLE_MINUTES` / `VLLM_IDLE_POLL` の変更は**次に起動する watcher から**有効。既に稼働中の watcher には反映されない (一度 `ensure-vllm.sh stop` するか、現 watcher が自然終了してから再起動)。
+
+**前提 (canonical path)**: スキルは `~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh` を絶対パスで呼ぶ。CLAUDE.md (`agent-rules` の運用) が clone 先をこのパスに規定しているため。別の場所に clone した場合はスキルの起動保証ステップが動かないので、canonical path に置く (または symlink する)。
+
 ### トレードオフ
 
 - アイドル後の**初回スキル実行はモデルロード待ち (1-2 分)**。連続実行・15 分以内の再実行はキャッシュ済みで即時
