@@ -3,7 +3,7 @@ name: fable-review
 description: Claude Fable 5 (最上位モデル) のサブエージェントによる最高精度レビュー。セキュリティ・データ破壊・課金に関わる変更や、大規模リファクタの最終レビューに使用。日常レビューは /local-review → /codex-review で行い、本スキルは「最後の砦」に限定する
 argument-hint: "[レビュー対象や追加指示（例: --base main, セキュリティ観点で）]"
 disable-model-invocation: false
-allowed-tools: Agent Bash(git *)
+allowed-tools: Agent Bash(git *) Bash(cat *) Read
 ---
 
 # Fable 5 による最終レビュー

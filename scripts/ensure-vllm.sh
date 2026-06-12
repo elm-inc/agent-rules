@@ -46,7 +46,8 @@ START_LOCK="/tmp/vllm-ensure-start.lock"
 LEASE="/tmp/vllm-last-ensure"            # up 呼び出し=直近の利用意図。watcher が idle タイマーに反映 (TOCTOU 緩和)
 
 log() { echo "[ensure-vllm] $*" >&2; }
-healthy() { curl -sf -m 5 "${BASE_URL}/models" >/dev/null 2>&1; }
+# /v1/models が応答し、かつ served-model-name が一致することを確認 (:8000 の別サーバを主力と誤認しない)
+healthy() { curl -sf -m 5 "${BASE_URL}/models" 2>/dev/null | grep -q "\"${SERVED_NAME}\""; }
 
 # systemd 常駐 (opt-in) 管理下か。read-only、sudo 不要。
 systemd_managed() {
