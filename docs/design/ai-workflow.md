@@ -7,7 +7,7 @@
 
 ## 1. 背景・目的
 
-AI に開発・レビュー・検証を任せる比率が上がるため、**単一モデル依存をやめて多層化** する。実装は Claude Opus 4.7 のまま、レビュー・テスト生成を複数ベンダーの LLM (Anthropic / OpenAI / Google / DeepSeek / ローカル Qwen) で分担する。
+AI に開発・レビュー・検証を任せる比率が上がるため、**単一モデル依存をやめて多層化** する。実装は Claude Opus 4.8 (高難度の要所は Fable 5)、レビュー・テスト生成を複数ベンダーの LLM (Anthropic / OpenAI / Google / DeepSeek / ローカル Qwen) で分担する。
 
 Claude と GPT は学習分布が近く同じ間違い方をしやすいため、Gemini と DeepSeek を混ぜて思考の多様性を確保する。さらに pre-commit hooks 等の **機械検証 (非 AI)** を併用し、**3 層 (機械・LLM・人間)** で品質を担保する。
 
@@ -15,7 +15,7 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 
 | ロール | モデル / ツール | スキル | 採用理由 |
 |---|---|---|---|
-| 実装 (主) | Claude Opus 4.7 | (Claude Code 本体) | 長文推論・コード横断、現状の最高性能枠 |
+| 実装 (主) | Claude Opus 4.8 (要所は Fable 5) | (Claude Code 本体) | 長文推論・コード横断、常用最高性能枠 (最難関は Fable 5 委譲) |
 | 0 次レビュー | ローカル Qwen2.5-Coder-32B (vLLM/FP8) | `/local-review` | コスト 0、機密データ送信不要、無制限回せる |
 | セカンドオピニオン | Codex (GPT-5) | `/codex-review` 他 | Anthropic と別ベンダー、修正提案が具体的 |
 | 設計レッドチーム | DeepSeek-R1 (API) | `/deepseek-redteam` | 思考連鎖で深い問題発見、$0.007/回 と激安 |
@@ -35,7 +35,7 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
    └→ (任意) /codex-audit で実装視点ツッコミ
 
 [実装]
-  Claude Opus 4.7 で実装
+  Claude Opus 4.8 で実装 (高難度は Fable 5 委譲)
 
 [コミット前]
   /local-review                      ← 0 次 (秒)

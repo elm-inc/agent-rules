@@ -24,12 +24,14 @@ CLAUDE.md に標準オーケストレーション (Opus 司令塔 + Fable 両端
 
 agent-rules に `agents/` を新設し、`install.sh` が `~/.claude/agents/*` へ symlink 同期する (skills と同方式)。初期セットは探索・調査の「床」を安価に固める 2 つ:
 
-| サブエージェント | model | 役割 |
-|---|---|---|
-| `explorer` | haiku | コード探索・位置特定・地図化 (read-only)。司令塔の文脈とコストを節約 |
-| `researcher` | haiku | 外部調査 (Web/ドキュメント) → 出典付き要約 (read-only) |
+| サブエージェント | model | tools | 役割 |
+|---|---|---|---|
+| `explorer` | haiku | Read, Grep, Glob | コード探索・位置特定・地図化。Bash を持たせず read-only を構造的に強制。司令塔の文脈とコストを節約 |
+| `researcher` | haiku | WebSearch, WebFetch, Read | 外部調査 (Web/ドキュメント) → 出典付き要約 (read-only) |
 
 難所実装は既存の `/fable-task`、レビューは既存の多層スキルが担うため、サブエージェントは重複を避けて「探索・調査」に絞る。スキル本体は inherit のまま下げない (ADR の別判断と整合) が、**探索専用サブエージェントは Haiku に振るのが定石**。
+
+> 補足 (2026-06-12 レビュー反映): agent frontmatter は Bash のサブコマンドを制限できないため、explorer の "read-only" を宣言で済ませず **Bash 自体を tools から外して構造的に強制**した (検索の大半は Read/Grep/Glob で賄える)。`git log` 等の文脈付き検索が必要になった場合のみ本体/別エージェントで行う。
 
 ### 3. ファンアウトのコスト規律を明文化する
 

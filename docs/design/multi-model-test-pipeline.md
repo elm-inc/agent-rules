@@ -38,7 +38,7 @@ ADR-0001 で **レビュー** の多モデル化が完了 (Phase 1-5)。次の�
 
 [③ テスト実装 (コード生成)]          ← 単一モデル
   /test-generate <target> --implement <観点ファイル>
-   → Qwen-Coder-32B (主) または Claude Opus 4.7 (本体)
+   → Qwen-Coder-32B (主) または Claude Opus 4.8 (本体)
 
 [④ テストデータ生成]                ← 限定的補助
   /test-data <target>

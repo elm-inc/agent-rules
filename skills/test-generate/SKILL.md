@@ -3,7 +3,7 @@ name: test-generate
 description: テスト観点の列挙とテスト実装を生成する。--brainstorm で複数 LLM (DeepSeek-R1 + Qwen + 任意で Distill/Gemini) を並列実行して観点を多面化、--implement で観点ファイルからコード生成。引数なしは旧挙動 (列挙 + 実装を 1 ステップで、Qwen 単独)
 argument-hint: "<対象> [--brainstorm | --implement <観点ファイル>] [--with-distill] [--with-gemini] [--property] [--mutants <list>]"
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(flock *) Bash(docker *) Bash(bash *) Read Write Edit
+allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(flock *) Bash(docker *) Bash(bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh*) Read Write Edit
 ---
 
 # テスト観点列挙 + 実装生成 (多モデル対応)
@@ -40,7 +40,7 @@ flock -w 600 "$LOCKFILE" bash -c '
 '
 ```
 
-`--implement` は Qwen 単独で常駐 vLLM を使うため排他不要 (常時並行 OK)。
+`--implement` は Qwen 単独 (オンデマンド起動、`ensure-vllm.sh` で起動保証) を使うため排他不要 (常時並行 OK)。
 
 ## 引数の解釈
 
@@ -212,7 +212,7 @@ threshold チューニング: char n-gram TF-IDF のため日本語短文は類�
 
 ### Phase B-2: `--implement <観点ファイル>` モード
 
-排他不要 (Qwen 単独で常駐 vLLM を使用)。観点ファイル → ケース列挙 → コード生成:
+排他不要 (Qwen 単独、オンデマンド起動)。観点ファイル → ケース列挙 → コード生成:
 
 ```
 以下の観点リストに従って、{FRAMEWORK} 形式でテスト実装を書いてください。
@@ -229,7 +229,7 @@ threshold チューニング: char n-gram TF-IDF のため日本語短文は類�
 {TARGET_CODE}
 ```
 
-Qwen-Coder-32B (常駐 vLLM) で実装生成。
+Qwen-Coder-32B (オンデマンド vLLM) で実装生成。
 
 ### Phase B-3: 旧挙動 (引数なし、後方互換)
 
@@ -255,9 +255,19 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
+## Qwen 起動保証 (実装系モード B-2〜B-5・context プローブ共通)
+
+Qwen を使う**すべてのモード** (`--implement` / 旧挙動 / `--property` / `--mutants`) は、最初の Qwen 呼び出しの前に必ずオンデマンド起動を保証する (vLLM は常駐していない):
+
+```bash
+bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh || { echo "vLLM を起動できませんでした"; exit 1; }
+```
+
+(`--brainstorm` の Qwen ステップは既に step 2 で ensure 済み。)
+
 ## Qwen context 制約への対処
 
-vLLM `--max-model-len 4096` (現状) 制約下では `max_tokens` を動的に決定:
+vLLM `--max-model-len 4096` (現状) 制約下では `max_tokens` を動的に決定 (上記 ensure-vllm.sh 実行後に行う):
 
 ```bash
 MAX_LEN=$(curl -s "${LOCAL_LLM_BASE_URL}/models" | jq -r '.data[0].max_model_len // 4096')
