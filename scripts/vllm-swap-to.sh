@@ -2,9 +2,10 @@
 # vllm-swap-to.sh — A 案 (swap 方式) の補助スクリプト
 #
 # ADR-0002 採択 / Phase 1 ベンチで 32GB VRAM では複数モデル同時ロード不可と判明。
-# このスクリプトは常駐 vllm-qwen-coder (32B FP8) を一時停止し、指定モデルを :8001
-# で起動、終了後に常駐を復帰させる。`/test-generate --brainstorm --with-distill`
+# このスクリプトは主力 vllm-qwen-coder (32B FP8) を一時停止し、指定モデルを :8001
+# で起動、終了後に主力を復帰させる。`/test-generate --brainstorm --with-distill`
 # や手動レッドチームから呼び出す想定。
+# 復帰はオンデマンド既定 (ADR-0005) に合わせ ensure-vllm.sh 経由 (docker start ではない)。
 #
 # Usage:
 #   bash vllm-swap-to.sh distill      # DeepSeek-R1-Distill-Qwen-14B (online FP8)
@@ -57,17 +58,18 @@ stop_main() {
 }
 
 restore_main() {
-  if ! is_main_running; then
-    echo "Restoring $MAIN_CONTAINER..."
-    docker start "$MAIN_CONTAINER" > /dev/null
-    if wait_healthy "http://localhost:8000/v1"; then
-      echo "  -> main healthy"
-    else
-      echo "  !! main not healthy after 5 min — check logs: docker logs $MAIN_CONTAINER"
-      return 1
-    fi
-  else
+  if is_main_running; then
     echo "$MAIN_CONTAINER already running."
+    return 0
+  fi
+  # オンデマンド既定 (ADR-0005) では主力は --rm なしでも停止中=コンテナ不在のことがあるため、
+  # docker start ではなく ensure-vllm.sh で復帰させる (未起動/停止中/systemd 常駐すべてに対応)。
+  echo "Restoring $MAIN_CONTAINER via ensure-vllm.sh..."
+  if bash "$(dirname "$0")/ensure-vllm.sh"; then
+    echo "  -> main healthy"
+  else
+    echo "  !! main の復帰に失敗 — bash $(dirname "$0")/ensure-vllm.sh status / docker logs $MAIN_CONTAINER を確認"
+    return 1
   fi
 }
 

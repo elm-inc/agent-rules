@@ -44,8 +44,17 @@ vLLM を**オンデマンド起動 + アイドル自動停止**に変更する�
 ## 影響範囲
 
 - 追加: `scripts/ensure-vllm.sh`, `scripts/vllm-idle-watch.sh`
-- 変更: `skills/local-review`, `skills/test-generate`, `skills/test-data` の起動保証ステップ / `docs/setup/local-llm.md`
-- 不変 (opt-in 化): `templates/systemd/vllm-qwen-coder.service`, `scripts/vllm-swap-to.sh`, `scripts/vllm-healthcheck.sh`
+- 変更: `skills/local-review`, `skills/test-generate`, `skills/test-data` の起動保証ステップ / `docs/setup/local-llm.md` / `scripts/vllm-swap-to.sh` (restore を `docker start` から `ensure-vllm.sh` 経由に変更)
+- 不変 (opt-in 化): `templates/systemd/vllm-qwen-coder.service`, `scripts/vllm-healthcheck.sh`
+
+## 追記 (2026-06-12 — Fable 5 最終レビュー反映)
+
+実装後の最終レビューで以下を是正・補強した (決定は不変、実装詳細の確定):
+
+- **常駐 (opt-in) との共存**: `ensure-vllm.sh` / `vllm-idle-watch.sh` は `systemctl is-active --quiet vllm-qwen-coder` を判定し、systemd 管理下では起動・停止・watcher に干渉せず healthy 確認のみ行う (相互 churn を防ぐ)。
+- **swap restore の整合**: 主力は `--rm` 撤去後も停止中=コンテナ不在のことがあるため、`vllm-swap-to.sh restore` は `docker start` ではなく `ensure-vllm.sh` で復帰する。
+- **`--rm` 撤去**: 異常終了 (GPU 競合/OOM) 時の `docker logs` を保全するため `docker run --rm` をやめ、起動前の `docker rm -f` で掃除する方式に統一。
+- **cold-start の直列化**: worktree 並列での同時起動による殺し合いを防ぐため up 経路を `flock` で直列化し、ロック取得後に healthy を再チェックする。
 
 ## 関連
 

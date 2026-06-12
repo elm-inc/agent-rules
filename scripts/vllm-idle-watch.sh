@@ -9,6 +9,7 @@
 # 環境変数:
 #   VLLM_PORT=8000  VLLM_IDLE_MINUTES=15 (この分数アイドルで停止)  VLLM_IDLE_POLL=60 (秒)
 set -uo pipefail
+cd / 2>/dev/null || true   # cwd 由来の事故 (awk リダイレクト等でのゴミファイル生成) を防ぐ
 
 PORT="${VLLM_PORT:-8000}"
 METRICS="http://localhost:${PORT}/metrics"
@@ -18,10 +19,15 @@ POLL="${VLLM_IDLE_POLL:-60}"
 
 log() { echo "[$(date '+%F %T')] vllm-idle-watch: $*"; }
 
+# systemd 常駐 (opt-in) 管理下なら停止しない (systemd が再起動して churn するため)
+systemd_managed() {
+  command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet vllm-qwen-coder 2>/dev/null
+}
+
 # prompt_tokens_total の合計 (engine ラベルが複数でも合算)。取得失敗時は前回値維持のため空を返す。
 activity() { curl -s -m 5 "$METRICS" 2>/dev/null | awk '/^vllm:prompt_tokens_total/{s+=$2} END{if(NR>0)print s+0}'; }
-# 実行中リクエストが 1 件でもあれば 1
-running() { curl -s -m 5 "$METRICS" 2>/dev/null | awk '/^vllm:num_requests_running/{s+=$2} END{print (s+0)>0?1:0}'; }
+# 実行中リクエストが 1 件でもあれば 1 (括弧で囲まないと awk が `>` を出力リダイレクトと誤解釈する)
+running() { curl -s -m 5 "$METRICS" 2>/dev/null | awk '/^vllm:num_requests_running/{s+=$2} END{print ((s+0)>0?1:0)}'; }
 
 prev="$(activity)"
 last_active=$(date +%s)
@@ -50,6 +56,11 @@ while true; do
 
   idle_min=$(( ($(date +%s) - last_active) / 60 ))
   if [ "$idle_min" -ge "$IDLE_MINUTES" ]; then
+    # 万一 systemd 常駐に切り替わっていたら停止しない (churn 防止の保険)
+    if systemd_managed; then
+      log "idle ${idle_min} 分だが systemd 常駐管理下のため停止せず監視終了"
+      exit 0
+    fi
     log "idle ${idle_min} 分 → vLLM を停止し GPU を解放します"
     docker stop "$CONTAINER" >/dev/null 2>&1 || true
     exit 0

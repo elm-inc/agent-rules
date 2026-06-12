@@ -151,8 +151,8 @@
 
 ## ドキュメント・図式
 
-設計と実装の可視化は **in-repo Markdown + Mermaid** が基盤 (Mermaid で不足なら D2)。Notion / Confluence / Linear Docs / バイナリ画像は設計図に使わない。
-根拠: [`docs/adr/0004`](docs/adr/0004-deliberate-design-bias.md) / 構造の雛形: `agent-rules/templates/docs/`
+設計と実装の可視化は **in-repo Markdown + Mermaid** が基盤 (Mermaid で不足なら D2)。Notion / Confluence / Linear Docs / バイナリ画像は設計図に使わない (設計図を in-repo に置く方針は ADR-0003 で確立)。
+構造の雛形: `agent-rules/templates/docs/`
 
 | ディレクトリ | 内容 |
 |--------|------|

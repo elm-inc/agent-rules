@@ -3,7 +3,7 @@ name: test-data
 description: スキーマ・型定義 (Pydantic / TypeScript / DB schema) から、業務的に妥当なテストデータ・factory・fixture を生成する。faker と違い「入社日が退職日より前」のような関係制約も LLM が補完する。大量生成はローカル LLM のバッチ推論で行う
 argument-hint: "<スキーマファイル or 型名> [--count <N>] [--format factory|fixture|json]"
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(bash *) Read Write
+allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh*) Read Write
 ---
 
 # 業務的に妥当なテストデータ生成

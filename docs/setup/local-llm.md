@@ -65,7 +65,7 @@ curl http://localhost:8000/v1/chat/completions \
 
 ### 3. systemd サービス化 (常駐させたい場合のみ、opt-in)
 
-`/etc/systemd/system/vllm-qwen.service` に上記 docker run を wrap した unit を置き、`systemctl enable --now vllm-qwen` で起動時自動起動。**ただし既定はオンデマンド運用** (次セクション)。常駐は GPU を専有して構わない高頻度利用マシンでのみ選ぶ。
+`/etc/systemd/system/vllm-qwen-coder.service` に上記 docker run を wrap した unit を置き、`systemctl enable --now vllm-qwen-coder` で起動時自動起動。**ただし既定はオンデマンド運用** (次セクション)。常駐は GPU を専有して構わない高頻度利用マシンでのみ選ぶ。
 
 ## オンデマンド運用 (既定、ADR-0005)
 
@@ -136,7 +136,7 @@ llm -m openai/qwen-coder \
 
 ## モデル swap (ADR-0002 採択フロー)
 
-ADR-0002 採択により、常駐 (Qwen-Coder-32B FP8) はそのまま、swap 用に Distill / 14B INT4 を必要時に起動するヘルパースクリプトを使う。
+ADR-0002 採択により、主力 (Qwen-Coder-32B FP8、オンデマンド起動) はそのまま、swap 用に Distill / 14B INT4 を必要時に起動するヘルパースクリプトを使う。
 
 ### 自動 swap (推奨)
 
@@ -160,7 +160,7 @@ bash scripts/vllm-swap-to.sh restore
 3. /v1/models で healthcheck (最大 6 分待機)
 4. ユーザーに利用例を表示
 
-`restore` で逆順 (swap 停止 → 主力 docker start)。swap 時間: 30-60 秒 / モデル。
+`restore` で逆順 (swap 停止 → 主力を `ensure-vllm.sh` 経由で復帰。オンデマンド既定では `--rm` 撤去後も停止中=コンテナ不在のことがあるため docker start は使わない)。swap 時間: 30-60 秒 / モデル。
 
 ### 健全性監視
 
@@ -186,7 +186,7 @@ publisher allowlist: `Qwen / deepseek-ai / RedHatAI / mistralai / google / meta-
 
 ### systemd unit 化 (AGENT-14, 手動 install 推奨)
 
-`docker run --restart unless-stopped` の常駐は維持はされるが、ブート時の起動順序制御 / journalctl ログ統一 / `vllm-swap-to.sh` との排他制御のため systemd unit 化推奨。テンプレ: [`templates/systemd/vllm-qwen-coder.service`](../../templates/systemd/vllm-qwen-coder.service)。
+**既定はオンデマンド運用 (ADR-0005)** であり、systemd 常駐は高頻度利用マシン向けの opt-in。常駐を選ぶ場合のみ、ブート時の起動順序制御 / journalctl ログ統一のため systemd unit 化する。テンプレ: [`templates/systemd/vllm-qwen-coder.service`](../../templates/systemd/vllm-qwen-coder.service)。
 
 セットアップ手順:
 
@@ -270,7 +270,7 @@ sed で `s|/home/elmo/models|/home/elmo/.cache/huggingface|` した上で配置�
 
 | プロバイダ | モデル | スキル | 用途 |
 |---|---|---|---|
-| Anthropic | Claude Opus 4.7 | (実装本体) | 実装・推論主力 |
+| Anthropic | Claude Opus 4.8 (Fable 5 は要所) | (実装本体) | 実装・推論主力 |
 | OpenAI | GPT-5 (Codex CLI) | `/codex-review` 他 | セカンドオピニオン |
 | Google | Gemini 2.5 Pro | `/gemini-review` | リポ横断・長文ドキュメント |
 | DeepSeek | DeepSeek-R1 | `/deepseek-redteam` | 設計レッドチーム (思考連鎖) |
