@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code ステータスライン
-# 表示: モデル · effort · context% · Max 使用率 (5h / 7d, 閾値で色変え) · git ブランチ
+# 表示: モデル · effort · context% · Max 使用率 (5h / 7d, 閾値で色変え) · vLLM 稼働 · git ブランチ
 #
 # Claude Code が stdin に JSON (model / effort / context_window / rate_limits / workspace …) を流す。
 # jq で抽出し、1 行に整形して stdout へ。色付けは ANSI。閾値: <50 緑 / 50-79 黄 / >=80 赤。
@@ -36,11 +36,21 @@ colpct() {
   printf '%s%s%%%s' "$c" "$n" "$RST"
 }
 
+# vLLM 稼働状態 (localhost:VLLM_PORT/v1/models へ軽量チェック。短タイムアウトでステータスラインを遅延させない。
+# 停止時は接続拒否で即返る)。稼働=緑●, 停止=淡色○。
+vport="${VLLM_PORT:-8000}"
+if curl -sf -m 1 "http://localhost:${vport}/v1/models" >/dev/null 2>&1; then
+  vllm="${GRN}vLLM●${RST}"
+else
+  vllm="${DIM}vLLM○${RST}"
+fi
+
 S="${DIM} · ${RST}"
 out="${CY}${model}${RST}"
 [ -n "$effort" ] && out="${out}${S}effort:${effort}"
 if [ -n "$ctx" ]; then out="${out}${S}ctx ${ctx%.*}%"; else out="${out}${S}ctx ${DIM}--%${RST}"; fi
 out="${out}${S}5h $(colpct "$five")${DIM} / ${RST}7d $(colpct "$seven")"
+out="${out}${S}${vllm}"
 [ -n "$branch" ] && out="${out}${S}⎇ ${branch}"
 
 printf '%s\n' "$out"
