@@ -20,6 +20,8 @@
 
 実装フロー: 仕様起草 → `/deepseek-redteam` で盲点レビュー → 実装 → **マージ前に `/gemini-review` で「受け入れ基準と ADR 制約への適合」を確認**。
 
+> これは Claude Code 公式の **Outcomes-driven validation**（ルーブリックを書き、エージェントが完遂、採点エージェントが評価）と同じ思想。Managed Agents (CMA) を使う場面では、この受け入れ基準をルーブリックとして渡し採点させる。
+
 ## ADR との違い
 
 - **ADR**: 過去に下した**決定の理由**を残す (immutable, 履歴として残る)

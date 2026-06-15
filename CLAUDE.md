@@ -100,6 +100,15 @@
 - ローカル LLM (vLLM) 起動: [`docs/setup/local-llm.md`](docs/setup/local-llm.md)。API キーは `scripts/env-snippet.sh` (`~/.*_token` 方式)
 - よくある不具合 (vLLM OOM / Gemini 応答空 / HF DL ストール / Distill 評価) の対処は [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) と各 `SKILL.md` に集約
 
+### Claude Code 開発プラクティス (公式準拠)
+
+multi-LLM オーケストレーションは独自拡張だが、Claude 単体の基本は公式に従う:
+
+- **開発ループ**: Explore → Plan → Review → Execute。高リスク・大規模変更は **plan モード**で計画をレビューしてから実行 (auto モードは安全分類器付きで既定採用済み)
+- **文脈管理**: CLAUDE.md は <200 行の索引に保つ。ファイル種別ごとの規約は `.claude/rules/*.md` (`paths:` でスコープ、該当ファイル読込時のみロード) に逃がす。本リポも採用 (`.claude/rules/`)、雛形は [`templates/claude-rules/`](templates/claude-rules/README.md)
+- **検証**: コード変更は「実行して確かめる」(UI はスクショ)。`/verify`・`/run` を使う
+- 公式ガイド: [common-workflows](https://code.claude.com/docs/en/common-workflows) / [permission-modes](https://code.claude.com/docs/en/permission-modes) / [memory](https://code.claude.com/docs/en/memory)
+
 ## 並列開発 (git worktree)
 
 タスクごとに worktree を分離し、安全に並列開発する。
