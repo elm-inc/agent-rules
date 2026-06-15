@@ -29,9 +29,9 @@
 
 見張らずに済むよう、**入力待ち/完了したら通知**させる:
 
+- **手元のデスクトップ/ターミナル通知 (本リポ同梱)**: `Notification` フック `scripts/claude-notify.sh` を `~/.claude/settings.json` に登録すると、入力待ち/許可確認の時にプロジェクト名付きでデスクトップ通知 (Linux/libnotify) + ターミナル通知 + ベルが鳴る。matcher は `permission_prompt|idle_prompt`。登録スニペットはスクリプト先頭に記載
 - モバイル push: `settings.json` の `agentPushNotifEnabled` が true なら有効。`/config` →「Push when Claude decides」で「判断が要る時/長時間タスク完了時」に iPhone へ
 - 外出先からは **Remote Control** (`claude remote-control`、iPhone/Android の Code タブ) で全セッションを状態ドット付きで一覧・操作
-- 手元のデスクトップ/ターミナルでも鳴らしたい場合は `Notification`/`Stop` フックを追加 (任意)
 
 → 通知が来たセッションだけ `claude agents` から開いて対応する。
 
