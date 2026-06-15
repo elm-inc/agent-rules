@@ -122,6 +122,7 @@ multi-LLM オーケストレーションは独自拡張だが、Claude 単体の
 - **デフォルトは単一セッション**: `/worktree-start` → 同一セッション内で `cd <worktree>` して作業 → メインに戻り `/worktree-finish`。メインワークツリーでは直接コード変更しない原則を維持
 - 真に並列化する独立タスクのみ別セッション: `cd <worktree> && claude --remote-control "<名>"` (Remote Control 不要なら `--no-remote`)
 - タスクレジストリは `<repo>/.git/parallel-tasks.json` に記録、全 worktree から共有参照
+- **多数セッションを並行する時** (worktree 並列 + プロジェクト横断) は `claude agents` (Agent View) をハブに、`/worktree-list`・`/status` と併用し「入力待ちだけ対応」。運用ランブック: [`docs/setup/session-management.md`](docs/setup/session-management.md)
 
 ## Linear イシュー管理
 

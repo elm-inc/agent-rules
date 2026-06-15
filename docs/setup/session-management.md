@@ -1,0 +1,59 @@
+# 多並行セッション管理ランブック
+
+同一プロジェクトの並列タスク (git worktree) と複数プロジェクトを、Claude Code セッションを多数 (5〜10+) 開いて進めるときの運用。「どれが自分の入力待ちか分からず管理しきれない」を解消するのが目的。
+
+## 基本方針
+
+**10 窓を前に並べて巡回しない。1 つのハブで状態を見て、入力が要るものだけに介入する。**
+
+3 つの集約を役割分担で使う:
+
+| 見たいもの | ツール | 何が分かるか |
+|---|---|---|
+| **各セッションのライブ状態** | `claude agents` (Agent View) | 全セッションを「入力待ち / 実行中 / 完了」でグループ表示。ここから新規ディスパッチも。**ハブはこれ** |
+| **同一プロジェクトの並列タスク構造** | `/worktree-list` | worktree ごとのタスク・変更状況・衝突リスク (`<repo>/.git/parallel-tasks.json` レジストリ) |
+| **プロジェクト横断のリポ状態** | `/status` | elm-inc 全リポの最近の commit / open PR・Issue / memory / 未コミット変更 |
+
+`claude agents` = 今どれが自分を待っているか、`/worktree-list` = タスクの全体像、`/status` = リポの状態。
+
+## セッションの一覧・切替・命名
+
+- **`claude --resume`**: セッションピッカー (名前・ブランチ・最終更新・メッセージ数)。`Ctrl+W`=全 worktree / `Ctrl+A`=全プロジェクト / `Ctrl+B`=ブランチ絞り / `/`=検索。← この 2 軸切替がまさに今回の用途
+- **`/resume`**: セッション内から別セッションへ切替
+- **`claude --continue`**: そのディレクトリの直近セッションを再開
+- **命名 (重要)**: ピッカー/Agent View を読みやすくするため必ず名前を付ける
+  - worktree 並列セッション: `/worktree-start` 経由で起動 (`claude --remote-control "<タスク名>"`) すれば**タスク名付き**になる
+  - プロジェクト横断のセッション: **`/rename <プロジェクト:タスク>`** で命名 (例 `tamayori:persona実装`)
+
+## 子守りをやめる (通知)
+
+見張らずに済むよう、**入力待ち/完了したら通知**させる:
+
+- モバイル push: `settings.json` の `agentPushNotifEnabled` が true なら有効。`/config` →「Push when Claude decides」で「判断が要る時/長時間タスク完了時」に iPhone へ
+- 外出先からは **Remote Control** (`claude remote-control`、iPhone/Android の Code タブ) で全セッションを状態ドット付きで一覧・操作
+- 手元のデスクトップ/ターミナルでも鳴らしたい場合は `Notification`/`Stop` フックを追加 (任意)
+
+→ 通知が来たセッションだけ `claude agents` から開いて対応する。
+
+## セッションを増やしすぎない (根本対策)
+
+別セッションが正解なのは**協調不要の独立並列**だけ。新しい窓を開く前に:
+
+- **片手間の探索・調査は新窓を開かず、サブエージェント** (`explorer`/`researcher`, Haiku) に委譲して**今のセッション内**で済ます
+- worktree 運用の原則は「**デフォルトは単一セッション**」(同一セッション内で `cd <worktree>` して作業 → メインに戻り `/worktree-finish`)。真に同時進行が要る独立タスクだけ別セッションにする
+- 並列分解は最大 5 を目安 (>10 は無益。標準オーケストレーション参照)
+- 完了した worktree は `/worktree-finish` で畳む。古いセッションは `cleanupPeriodDays` (既定 30 日) で自然消滅するが、不要な窓は閉じる
+
+## 推奨デイリーフロー
+
+1. 開始時: `/status` で全体把握 → `claude agents` で各セッションの状態確認
+2. 新規タスク: 独立並列が必要か判断 (不要なら subagent/単一セッション)。必要なら `/worktree-start <名> <説明>`、横断作業は `/rename` で命名
+3. 進行中: 窓を巡回せず、通知 or `claude agents` の「入力待ち」だけに対応
+4. 完了: `/worktree-finish` でマージ・片付け
+
+## 参照
+
+- Agent View: https://code.claude.com/docs/en/agent-view
+- Sessions (resume/rename/picker): https://code.claude.com/docs/en/sessions
+- Remote Control: https://code.claude.com/docs/en/remote-control
+- 自前スキル: `/status`, `/worktree-list`, `/worktree-start`, `/worktree-finish`
