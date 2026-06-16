@@ -115,12 +115,12 @@ multi-LLM オーケストレーションは独自拡張だが、Claude 単体の
 
 | スキル | 用途 |
 |--------|------|
-| `/worktree-start <名> <説明>` | worktree 作成 + タスク登録 (`--linear <ID>` で Issue 連携) |
+| `/worktree-start <名> <説明>` | worktree 作成 + タスク登録 (`--linear <ID>` で Issue 連携 / `--tab` で別 zellij タブに引き継ぎ起動) |
 | `/worktree-list` | 全タスクの状況・衝突リスク確認 |
 | `/worktree-finish [名]` | マージ + worktree 削除 (Linear 自動 Done) |
 
 - **デフォルトは単一セッション**: `/worktree-start` → 同一セッション内で `cd <worktree>` して作業 → メインに戻り `/worktree-finish`。メインワークツリーでは直接コード変更しない原則を維持
-- 真に並列化する独立タスクのみ別セッション: `cd <worktree> && claude --remote-control "<名>"` (Remote Control 不要なら `--no-remote`)
+- 真に並列化する独立タスクのみ別セッション: **`/worktree-start <名> <説明> --tab`** で別 zellij タブに worktree を開き、引き継ぎドキュメント (`<共有.git>/worktree-tasks/<ID>-<名>.md` に ID 付き集約・永続) を初期プロンプトに渡して `claude` 自動起動。子は新規セッションで親の会話・プランを継がないため引き継ぎ doc が要 (手動なら `cd <worktree> && claude --remote-control "<名>"`、Remote Control 不要なら `--no-remote`)
 - タスクレジストリは `<repo>/.git/parallel-tasks.json` に記録、全 worktree から共有参照
 - **多数セッションを並行する時** (worktree 並列 + プロジェクト横断) は `claude agents` (Agent View) をハブに、`/worktree-list`・`/status` と併用し「入力待ちだけ対応」。運用ランブック: [`docs/setup/session-management.md`](docs/setup/session-management.md)
 
