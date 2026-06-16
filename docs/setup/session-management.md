@@ -51,6 +51,21 @@
 3. 進行中: 窓を巡回せず、通知 or `claude agents` の「入力待ち」だけに対応
 4. 完了: `/worktree-finish` でマージ・片付け
 
+## 端末多重化 (zellij) のセッション衛生
+
+Claude 側を整えても、zellij のセッションが別レイヤーで溜まる。たまり方は 2 種類で対処が違う:
+
+- **① EXITED (死骸 / resurrect 待ち)**: 中身は終了済みだが `session_serialization` (既定 on) が復活用にキャッシュへ残す。純粋なゴミ
+- **② 実行中の detach セッション**: 中で shell/claude が生きている。一括 kill は危険
+
+運用:
+
+- **ハブは session-manager** (`Ctrl+o w`): 全セッションを一覧・切替・kill。`claude agents` と同じ「窓を巡回しない・ハブで見る」発想を端末側にも適用する
+- **命名で増殖を止める**: 裸の `zellij` 起動はランダム名 (`kind-panda` 等) を量産し、attach せず再起動すると `scm` / `scm-2` のような重複ができる。`zj [名]` (= `zellij attach --create`、引数省略時はカレントディレクトリ名) で **プロジェクト = セッション 1 つ**に集約
+- **死骸を一掃**: `zjreap` (= `zellij delete-all-sessions -y`) は **EXITED だけ削除し実行中は触らない** (安全)。個別 kill は `zellij kill-session <名>`
+- **そもそも溜めたくない場合**: `~/.config/zellij/config.kdl` で `session_serialization false` にすると EXITED を残さない (resurrect 機能は失う)
+- ヘルパー `zj` / `zjreap` / `zjls` は `~/.bashrc` に定義済み
+
 ## 参照
 
 - Agent View: https://code.claude.com/docs/en/agent-view

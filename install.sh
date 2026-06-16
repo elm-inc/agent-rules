@@ -81,6 +81,11 @@ for config_file in "$REPO_DIR"/.codex/*.config.toml; do
 done
 
 echo ""
+echo "== Shell integration =="
+mkdir -p "$HOME/.claude/shell"
+ln_if_not "$REPO_DIR/scripts/zellij-hygiene.sh" "$HOME/.claude/shell/zellij-hygiene.sh"
+
+echo ""
 echo "== Bash integration =="
 SNIPPET='source $HOME/.claude/skills/cli-help/bash.sh'
 if grep -qxF "$SNIPPET" "$HOME/.bashrc" 2>/dev/null; then
@@ -88,6 +93,14 @@ if grep -qxF "$SNIPPET" "$HOME/.bashrc" 2>/dev/null; then
 else
     printf '\n# modern CLI cheatsheet & soft reminder (agent-rules)\n%s\n' "$SNIPPET" >> "$HOME/.bashrc"
     echo "add:  .bashrc <- source cli-help/bash.sh"
+fi
+
+ZJ_SNIPPET='source $HOME/.claude/shell/zellij-hygiene.sh'
+if grep -qxF "$ZJ_SNIPPET" "$HOME/.bashrc" 2>/dev/null; then
+    echo "ok:   .bashrc already sources zellij-hygiene.sh"
+else
+    printf '\n# zellij session hygiene (agent-rules)\n%s\n' "$ZJ_SNIPPET" >> "$HOME/.bashrc"
+    echo "add:  .bashrc <- source zellij-hygiene.sh"
 fi
 
 echo ""
