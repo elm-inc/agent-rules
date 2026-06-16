@@ -1,9 +1,9 @@
 ---
 name: worktree-start
 description: 並列開発用の git worktree を作成し、タスクをレジストリに登録する。新しいタスクを並列で始めたい、worktree を作りたいときに使用
-argument-hint: "<タスク名> <タスクの説明> [--linear <ID>] [--no-remote]"
+argument-hint: "<タスク名> <タスクの説明> [--linear <ID>] [--no-remote] [--tab]"
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(jq *) Bash(cat *) Bash(mkdir *) Bash(date *) mcp__linear__* Read Write
+allowed-tools: Bash(git *) Bash(jq *) Bash(cat *) Bash(mkdir *) Bash(date *) Bash(zellij action *) mcp__linear__* Read Write
 ---
 
 # 並列開発: worktree 作成とタスク登録
@@ -20,6 +20,7 @@ git worktree を作成し、並列開発タスクをレジストリに登録す�
   - Linear Issue を In Progress に遷移
   - `parallel-tasks.json` に `linear_issue_id` を記録
 - `--no-remote`: Remote Control 付き起動コマンドを案内しない。指定しない場合 (デフォルト) は最終案内に `claude --remote-control "<タスク名>"` を含める (iPhone 公式 Claude アプリの Code タブから push 通知・状態確認可能)
+- `--tab`: zellij セッション内 (`$ZELLIJ` が設定されている) なら、worktree を cwd にした新しい zellij タブを開き、起動コマンドを打ち込んで着手する (Enter は手動)。zellij 外では無視して従来の案内に戻す
 
 タスク名が未指定の場合はユーザーに確認する。Linear 運用ポリシー (project_linear_workflow メモリ) に従い、ステークホルダー可視化が必要な作業は `--linear` を付ける。
 
@@ -74,8 +75,25 @@ git worktree を作成し、並列開発タスクをレジストリに登録す�
   ```
 - jq がインストールされていない場合は Python の json モジュールで代替する
 
-### 5. ユーザーへの案内
-以下を表示する (Linear 連携時は Issue 情報も含める)。デフォルトでは Remote Control 付きの起動コマンドを案内する。`--no-remote` が指定された場合は `--remote-control ...` 部分を省く。
+### 5. zellij 別タブで着手 (`--tab` 指定時のみ)
+
+`--tab` が指定され、かつ zellij セッション内 (`$ZELLIJ` が設定されている) なら、worktree を cwd にした新しい zellij タブを開き、起動コマンドを打ち込む。`--no-remote` 時は打ち込むコマンドを `claude` のみにする。
+
+```bash
+if [ -n "${ZELLIJ:-}" ]; then
+  zellij action new-tab --cwd "<worktree パス>" --name "<タスク名>"   # 新タブにフォーカスが移る
+  zellij action write-chars 'claude --remote-control "<タスク名>"'      # --no-remote 時は `claude` のみ
+  # Enter は自動送出しない (誤爆防止)。自動起動したいなら続けて: zellij action write 13
+else
+  echo "warning: zellij セッション外のため --tab は無視。手動で起動してください。"
+fi
+```
+
+- タブ名 = タスク名になるため、`/worktree-list` と併せて「どのタブが何の作業か」が一目で分かる
+- 別 zellij セッション (`claude --remote-control` を別端末で) より軽い「真の並列」着手手段
+
+### 6. ユーザーへの案内
+以下を表示する (Linear 連携時は Issue 情報も含める)。デフォルトでは Remote Control 付きの起動コマンドを案内する。`--no-remote` が指定された場合は `--remote-control ...` 部分を省く。`--tab` で別タブを開いた場合は「別タブを開いたので、そのタブで Enter を押すと起動」と案内する。
 
 ```
 worktree を作成しました:

@@ -62,6 +62,7 @@ Claude 側を整えても、zellij のセッションが別レイヤーで溜ま
 
 - **ハブは session-manager** (`Ctrl+o w`): 全セッションを一覧・切替・kill。`claude agents` と同じ「窓を巡回しない・ハブで見る」発想を端末側にも適用する
 - **命名で増殖を止める**: 裸の `zellij` 起動はランダム名 (`kind-panda` 等) を量産し、attach せず再起動すると `scm` / `scm-2` のような重複ができる。`zj [名]` (= `zellij attach --create`、引数省略時はカレントディレクトリ名) で **プロジェクト = セッション 1 つ**に集約
+- **worktree を別タブで着手**: `/worktree-start <名> <説明> --tab` で worktree を cwd にした zellij 新タブを開き、起動コマンドを打ち込む (Enter は手動)。別 zellij セッションより軽い「真の並列」着手
 - **死骸を一掃**: `zjreap` (= `zellij delete-all-sessions -y`) は **EXITED だけ削除し実行中は触らない** (安全)。個別 kill は `zellij kill-session <名>`
 - **そもそも溜めたくない場合**: `~/.config/zellij/config.kdl` で `session_serialization false` にすると EXITED を残さない (resurrect 機能は失う)
 - ヘルパー `zj` / `zjreap` / `zjls` は `~/.bashrc` に定義済み
