@@ -299,6 +299,132 @@ def summarize_document(doc: dict) -> list[str]:
     return lines
 
 
+# ---------- design spec 抽出 (画像で取りにくい要素: テキスト/px/色/スタイル) ----------
+
+def _rgba_hex(color: dict, opacity: float | None = None) -> str:
+    r = round(color.get("r", 0) * 255)
+    g = round(color.get("g", 0) * 255)
+    b = round(color.get("b", 0) * 255)
+    a = color.get("a", 1.0)
+    if opacity is not None:
+        a *= opacity
+    h = f"#{r:02X}{g:02X}{b:02X}"
+    return h if a >= 0.999 else f"{h}@{round(a * 100)}%"
+
+
+def _fills_summary(node: dict) -> list[str]:
+    out = []
+    for p in node.get("fills", []) or []:
+        if p.get("visible") is False:
+            continue
+        t = p.get("type")
+        if t == "SOLID":
+            out.append(_rgba_hex(p.get("color", {}), p.get("opacity")))
+        elif t and t.startswith("GRADIENT"):
+            stops = [_rgba_hex(s.get("color", {})) for s in p.get("gradientStops", [])]
+            out.append(f"{t}({'/'.join(stops)})")
+        elif t == "IMAGE":
+            out.append(f"IMAGE(ref={(p.get('imageRef') or '?')[:8]})")
+    return out
+
+
+def extract_spec(node: dict, depth: int, max_depth: int) -> dict:
+    """1 ノードから「画像では拾いにくい忠実度データ」だけを抜く。生 JSON より遥かに小さい。"""
+    s: dict = {"id": node.get("id"), "name": node.get("name"), "type": node.get("type")}
+    bb = node.get("absoluteBoundingBox")
+    if bb:
+        s["size_px"] = {"w": round(bb.get("width", 0)), "h": round(bb.get("height", 0))}
+    if node.get("type") == "TEXT":
+        s["text"] = node.get("characters")
+        st = node.get("style", {})
+        s["font"] = {
+            "family": st.get("fontFamily"), "weight": st.get("fontWeight"),
+            "size_px": st.get("fontSize"), "line_height_px": st.get("lineHeightPx"),
+            "letter_spacing": st.get("letterSpacing"),
+            "align": st.get("textAlignHorizontal"),
+        }
+    fills = _fills_summary(node)
+    if fills:
+        s["fill"] = fills
+    strokes = [s_ for s_ in node.get("strokes", []) or [] if s_.get("type") == "SOLID"]
+    if strokes:
+        s["stroke"] = {"color": [_rgba_hex(p.get("color", {}), p.get("opacity")) for p in strokes],
+                       "weight": node.get("strokeWeight")}
+    if node.get("cornerRadius") is not None:
+        s["radius"] = node["cornerRadius"]
+    elif node.get("rectangleCornerRadii"):
+        s["radius"] = node["rectangleCornerRadii"]
+    if node.get("opacity") is not None and node["opacity"] < 1:
+        s["opacity"] = node["opacity"]
+    eff = []
+    for e in node.get("effects", []) or []:
+        if e.get("visible") is False:
+            continue
+        et = e.get("type")
+        if et in ("DROP_SHADOW", "INNER_SHADOW"):
+            o = e.get("offset", {})
+            sp = f" spread{round(e.get('spread', 0))}" if e.get("spread") else ""
+            eff.append(f"{et} {_rgba_hex(e.get('color', {}))} "
+                       f"x{round(o.get('x', 0))} y{round(o.get('y', 0))} "
+                       f"blur{round(e.get('radius', 0))}{sp}")
+        elif et in ("LAYER_BLUR", "BACKGROUND_BLUR"):
+            eff.append(f"{et} {round(e.get('radius', 0))}")
+    if eff:
+        s["effects"] = eff
+    if node.get("layoutMode") in ("HORIZONTAL", "VERTICAL"):
+        s["layout"] = {
+            "mode": node["layoutMode"], "gap": node.get("itemSpacing"),
+            "padding": [node.get("paddingTop", 0), node.get("paddingRight", 0),
+                        node.get("paddingBottom", 0), node.get("paddingLeft", 0)],
+            "primary": node.get("primaryAxisAlignItems"),
+            "counter": node.get("counterAxisAlignItems"),
+        }
+    if depth < max_depth:
+        kids = [extract_spec(c, depth + 1, max_depth) for c in node.get("children", [])]
+        if kids:
+            s["children"] = kids
+    elif node.get("children"):
+        s["children_truncated"] = len(node["children"])
+    return s
+
+
+def spec_tree_lines(s: dict, indent: int = 0) -> list[str]:
+    pad = "  " * indent
+    head = f"{pad}{s.get('type') or '?'} \"{s.get('name') or ''}\""
+    sz = s.get("size_px")
+    if sz:
+        head += f"  ({sz['w']}×{sz['h']}px)"
+    head += f"  {s.get('id')}"
+    lines = [head]
+    det = []
+    if "text" in s:
+        det.append(f'text: "{(s["text"] or "")[:80]}"')
+    if "font" in s:
+        f = s["font"]
+        det.append(f"font: {f.get('family')} {f.get('weight')} {f.get('size_px')}px "
+                   f"/ lh {f.get('line_height_px')}")
+    if "fill" in s:
+        det.append("fill: " + ", ".join(s["fill"]))
+    if "stroke" in s:
+        det.append(f"stroke: {','.join(s['stroke']['color'])} {s['stroke']['weight']}px")
+    if "radius" in s:
+        det.append(f"radius: {s['radius']}")
+    if "effects" in s:
+        det.append("effect: " + "; ".join(s["effects"]))
+    if "layout" in s:
+        layout = s["layout"]
+        det.append(f"auto-layout: {layout['mode']} gap={layout['gap']} pad={layout['padding']}")
+    if "opacity" in s:
+        det.append(f"opacity: {s['opacity']}")
+    for d in det:
+        lines.append(f"{pad}    · {d}")
+    for c in s.get("children", []):
+        lines.extend(spec_tree_lines(c, indent + 1))
+    if "children_truncated" in s:
+        lines.append(f"{pad}    … +{s['children_truncated']} children (深さ制限)")
+    return lines
+
+
 # ---------- subcommands ----------
 
 def cmd_me(client: Client, args):
@@ -357,31 +483,29 @@ def cmd_nodes(client: Client, args):
                   f"children={len(doc.get('children', []))}")
 
 
-def cmd_images(client: Client, args):
-    key, url_ids = parse_target(args.target)
-    ids = norm_ids(args.ids) or url_ids
-    if not ids:
-        die("--ids か node-id 付き URL が必要です")
-    out_dir = Path(args.out_dir or "figma-export")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    ttl = float(cfg(args, "version_ttl_s"))
-    version = "nocache" if args.no_cache else get_version(client, key, ttl, args.force)
+def render_nodes(client: Client, args, key: str, ids: list[str], fmt: str,
+                 scale: str, out_dir: Path, version: str) -> tuple[dict, int, int]:
+    """指定 node を画像化 (version 別キャッシュ済みなら render ごとスキップ)。
 
-    # version 別にダウンロード済みファイルがあれば render 自体をスキップ
-    cached_files, need = {}, []
+    {id: Path}, cached 件数, fetched 件数 を返す。images/inspect で共有。
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    no_cache = getattr(args, "no_cache", False)
+    force = getattr(args, "force", False)
+    result, need = {}, []
     for nid in ids:
         safe = nid.replace(":", "-")
-        f = out_dir / f"{safe}.{args.format}"
-        marker = cache_dir() / "images" / f"{key}-{version}-{safe}-{args.format}-{args.scale}"
-        if not args.no_cache and not args.force and marker.exists() and f.exists():
-            cached_files[nid] = f
+        f = out_dir / f"{safe}.{fmt}"
+        marker = cache_dir() / "images" / f"{key}-{version}-{safe}-{fmt}-{scale}"
+        if not no_cache and not force and marker.exists() and f.exists():
+            result[nid] = f
         else:
             need.append((nid, safe, f, marker))
-
+    n_cached = len(result)
     if need:
-        params = {"ids": ",".join(n[0] for n in need), "format": args.format}
-        if args.format in ("png", "jpg"):
-            params["scale"] = args.scale
+        params = {"ids": ",".join(n[0] for n in need), "format": fmt}
+        if fmt in ("png", "jpg"):
+            params["scale"] = scale
         resp = client.get(f"/v1/images/{key}", params=params).json()
         if resp.get("err"):
             die(f"images render error: {resp['err']}")
@@ -395,12 +519,70 @@ def cmd_images(client: Client, args):
             f.write_bytes(client.download(u))
             marker.parent.mkdir(parents=True, exist_ok=True)
             marker.write_text("1")
-            print(f"  ↓ {f}")
+            result[nid] = f
+    return result, n_cached, len(need)
 
-    for nid, f in cached_files.items():
-        print(f"  = {f} (cache)")
-    print(f"[done] {len(cached_files)} cached + {len(need)} fetched → {out_dir}/  "
-          f"(v={version})")
+
+def cmd_images(client: Client, args):
+    key, url_ids = parse_target(args.target)
+    ids = norm_ids(args.ids) or url_ids
+    if not ids:
+        die("--ids か node-id 付き URL が必要です")
+    out_dir = Path(args.out_dir or "figma-export")
+    ttl = float(cfg(args, "version_ttl_s"))
+    version = "nocache" if args.no_cache else get_version(client, key, ttl, args.force)
+    imgs, n_cached, n_fetched = render_nodes(
+        client, args, key, ids, args.format, args.scale, out_dir, version)
+    for nid, f in imgs.items():
+        print(f"  ↓ {f}")
+    print(f"[done] {n_cached} cached + {n_fetched} fetched → {out_dir}/  (v={version})")
+
+
+def cmd_inspect(client: Client, args):
+    """画像優先アプローチ: ①画像で視覚把握 → ②画像で取りにくい要素 (テキスト/px/色/
+    スタイル) だけを構造データで補完。両者をキャッシュ済み経路で 1 コマンドにまとめる。"""
+    key, url_ids = parse_target(args.target)
+    ids = norm_ids(args.ids) or url_ids
+    if not ids:
+        die("--ids か node-id 付き URL が必要です")
+    ttl = float(cfg(args, "version_ttl_s"))
+    version = "nocache" if args.no_cache else get_version(client, key, ttl, args.force)
+    out_dir = Path(args.out_dir or "figma-export")
+
+    # ① 画像 (視覚)
+    imgs, n_cached, n_fetched = render_nodes(
+        client, args, key, ids, args.format, args.scale, out_dir, version)
+
+    # ② データ (忠実度) — depth 制限付きノード取得
+    params = {"ids": ",".join(ids)}
+    if args.depth is not None:
+        params["depth"] = args.depth
+    data, _, _ = fetch_cached(
+        client, args, key, "nodes", f"/v1/files/{key}/nodes", params,
+        {"ids": sorted(ids), "depth": args.depth})
+    max_depth = args.depth if args.depth is not None else 8
+
+    specs = []
+    for nid in ids:
+        wrap = data.get("nodes", {}).get(nid)
+        if not wrap:
+            print(f"  ! {nid}: ノードデータなし (id 誤り?)", file=sys.stderr)
+            continue
+        spec = extract_spec(wrap.get("document", {}), 0, max_depth)
+        spec["image"] = str(imgs.get(nid, ""))
+        specs.append(spec)
+
+    out = args.out or f"figma-spec-{key}.json"
+    Path(out).write_text(json.dumps(specs, ensure_ascii=False, indent=2))
+
+    if args.json:
+        print(json.dumps(specs, ensure_ascii=False))
+    else:
+        for spec in specs:
+            print(f"\n🖼  {spec.get('image') or '(画像なし)'}")
+            print("\n".join(spec_tree_lines(spec)))
+        print(f"\n[spec] {len(specs)} node → {out}  "
+              f"(images: {n_cached} cached + {n_fetched} fetched in {out_dir}/, v={version})")
 
 
 def cmd_tokens(client: Client, args):
@@ -545,6 +727,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--scale", default="2", help="png/jpg の倍率 (既定 2)")
     sp.add_argument("--out-dir", help="保存先 (既定 figma-export/)")
     sp.set_defaults(func=cmd_images)
+
+    sp = sub.add_parser("inspect", help="画像 + 忠実度データ (テキスト/px/色/スタイル) を同時取得")
+    add_common(sp)
+    sp.add_argument("--ids", help="カンマ区切り node-id")
+    sp.add_argument("--depth", type=int, help="ツリー深さ制限 (既定 8)")
+    sp.add_argument("--format", default="png", choices=["png", "svg", "jpg"])
+    sp.add_argument("--scale", default="2", help="png/jpg の倍率 (既定 2)")
+    sp.add_argument("--out-dir", help="画像の保存先 (既定 figma-export/)")
+    sp.add_argument("--out", help="spec JSON の書き出し先 (既定 figma-spec-<key>.json)")
+    sp.set_defaults(func=cmd_inspect)
 
     sp = sub.add_parser("tokens"); add_common(sp)
     sp.add_argument("--out")

@@ -210,6 +210,7 @@ Figma へのアクセスは **認証も用途も別の 2 経路**を使い分け
 
 | スキル | 用途 |
 |--------|------|
+| `/figma inspect <key\|url>` | **デザイン取り込みの主役**: 画像で視覚把握 + 画像で取りにくい text/px/色/スタイルを構造データ抽出 (画像優先アプローチ) |
 | `/figma file\|nodes <key\|url>` | ファイル/ノード取得 (version 差分キャッシュ・既定は要約、`--out` で全 JSON) |
 | `/figma images <key\|url> --ids` | 画像一括書き出し (バッチ + version キャッシュ) |
 | `/figma tokens <key\|url>` | Variables/Styles を design tokens 化 |

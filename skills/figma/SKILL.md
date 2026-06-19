@@ -1,7 +1,7 @@
 ---
 name: figma
-description: Figma REST API をレート制限に配慮して効率的に使う。version 差分キャッシュ・送信スロットル・429 バックオフ・部分取得/バッチで無駄な呼び出しを構造的に減らす。ファイル取得・ノード部分取得・画像一括書き出し・design tokens 抽出・コメント取得に使用。対話的な「リンク→コード化」は別経路のリモート MCP を案内する
-argument-hint: "<subcommand> <key|url> [options] | me | file | nodes | images | tokens | comments | cache status"
+description: Figma REST API をレート制限に配慮して効率的に使う。version 差分キャッシュ・送信スロットル・429 バックオフ・部分取得/バッチで無駄な呼び出しを構造的に減らす。デザイン取り込みは inspect で「画像で視覚把握 + 画像では取りにくい text/px/色/スタイルを構造データ抽出」を同時に行う。ファイル取得・画像一括書き出し・design tokens 抽出・コメント取得にも使用。対話的な「リンク→コード化」は別経路のリモート MCP を案内する
+argument-hint: "<subcommand> <key|url> [options] | inspect | file | nodes | images | tokens | comments | cache status"
 disable-model-invocation: false
 allowed-tools: Bash(uv *) Bash(cat *) Bash(ls *) Bash(test *) Read Write
 ---
@@ -51,6 +51,20 @@ max_retries     = 4
 5. **部分取得 / バッチ** — `--ids` / `--depth` で必要枝だけ、`images` は複数 id を 1 リクエストに集約。
 6. **要約デフォルト** — `file`/`nodes` は既定で要約表示 (巨大 JSON でモデル文脈を浪費しない)。全 JSON は `--out`。
 
+## デザイン取り込みの推奨フロー (画像優先)
+
+Figma は**ファイルの作り方次第で取り出せるデータが変わり**、生 JSON だけだと UI 再現性が安定しない。
+そこで `inspect` は以下を 1 コマンドで行う (画像優先アプローチ):
+
+1. **画像で全体把握** — ノードを PNG レンダー。レイアウト・余白感・装飾は画像が最も確実。
+2. **画像で取りにくい要素だけ構造データで補完** — テキスト本文・フォント (family/weight/px/line-height)・
+   色 (hex + 不透明度)・fill/stroke・radius・effect (影)・auto-layout の gap/padding・px サイズ。
+3. 出力は巨大な生 JSON ではなく**コンパクトな spec** (画像パス紐付き)。モデルが画像と数値を突き合わせて
+   再現できる形にする。
+
+→ 「まず画像、ピクセル/テキストはデータ」を skill 側の動作として固定化している。最高忠実度の対話的
+codegen が要るなら、これに加えてリモート MCP の `get_design_context` を併用する。
+
 ## 実行方法
 
 `scripts/figma.py` は PEP 723 inline metadata の self-contained な `uv` スクリプト (グローバル pip 不要)。
@@ -85,6 +99,16 @@ uv run ${SKILL_DIR}/scripts/figma.py file KEY --out file.json    # 全 JSON 書�
 uv run ${SKILL_DIR}/scripts/figma.py nodes KEY --ids 12:34,56:78 --depth 1
 uv run ${SKILL_DIR}/scripts/figma.py nodes 'https://figma.com/design/KEY/N?node-id=12-34'
 ```
+
+### `inspect <key|url> [--ids a,b,c]` — 画像 + 忠実度データを同時取得 ★デザイン取り込みの主役
+画像優先アプローチ (上記「推奨フロー」) を 1 コマンドで。画像を `--out-dir` に、コンパクトな spec を
+`--out` (既定 `figma-spec-<key>.json`) に書き出し、stdout に「画像パス + spec ツリー」を表示。
+```bash
+uv run ${SKILL_DIR}/scripts/figma.py inspect 'https://figma.com/design/KEY/N?node-id=12-34' --depth 5
+uv run ${SKILL_DIR}/scripts/figma.py inspect KEY --ids 12:34 --depth 4 --out-dir assets --out spec.json
+```
+`--depth` で spec の深さを制限 (既定 8)。抽出項目: テキスト本文 / font (family・weight・px・line-height) /
+color (hex+不透明度) / fill / stroke / radius / effect (影) / auto-layout (gap・padding) / px サイズ。
 
 ### `images <key|url> --ids a,b,c` — 画像一括書き出し
 複数 id を 1 リクエストでレンダー → ダウンロード。version 別にキャッシュ済みなら render ごとスキップ。
