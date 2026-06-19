@@ -195,6 +195,26 @@ multi-LLM オーケストレーションは独自拡張だが、Claude 単体の
 
 軽微な用途は `use` のソフト適用のみ。仕上げ・量産時に `critic` を回す。
 
+## Figma 連携 (REST + リモート MCP の併用)
+
+Figma へのアクセスは **認証も用途も別の 2 経路**を使い分ける。混同しない。
+
+| 経路 | 認証 | 向き |
+|---|---|---|
+| `/figma` スキル (REST API) | PAT `~/.figma_token` | ヘッドレス/バッチ: 画像一括書き出し・design tokens 抽出・コメント巡回・キー横断。**レート制限はここで問題化するので skill が version 差分キャッシュ + スロットル + 429 バックオフで制御** |
+| リモート MCP `https://mcp.figma.com/mcp` | OAuth (PAT 不可) | 対話的に「このリンク/フレーム→コード化」。Figma 自前の codegen が勝る。`claude plugin install figma@claude-plugins-official` → `/plugin` で OAuth 許可 |
+
+- ローカル MCP (`127.0.0.1:3845`) はデスクトップアプリ常駐前提で **Linux 不可**。本環境では上記 2 経路のみ。
+- レート制限を気にする処理 (一括/横断/CI) は必ず `/figma` 経由 (生 curl で叩かない)。`/figma cache status` で節約数を確認。
+- 抽出した tokens は `/design-voice` のプロファイル素材にできる。
+
+| スキル | 用途 |
+|--------|------|
+| `/figma file\|nodes <key\|url>` | ファイル/ノード取得 (version 差分キャッシュ・既定は要約、`--out` で全 JSON) |
+| `/figma images <key\|url> --ids` | 画像一括書き出し (バッチ + version キャッシュ) |
+| `/figma tokens <key\|url>` | Variables/Styles を design tokens 化 |
+| `/figma cache status` | キャッシュ統計・節約できたリクエスト数 |
+
 ## シェル環境 (モダン CLI ツール)
 
 Rust 製モダン CLI (`rg`, `fd`, `bat`, `eza`, `dust`, `btm`, `procs`, `delta`, `sd`, `hyperfine`, `tldr`, `jless`, `tokei`, `zoxide`) を使いこなすための仕組み。
