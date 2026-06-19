@@ -158,6 +158,13 @@ class Client:
             timeout=self.timeout,
             follow_redirects=True,
         )
+        # 画像 DL 専用のヘッダ無しクライアント。/v1/images は S3/CDN の署名 URL を返すため、
+        # PAT 入りの _http で叩くとトークンが api.figma.com 外へ漏れる。必ず分離する。
+        self._dl = httpx.Client(timeout=self.timeout, follow_redirects=True)
+
+    def close(self):
+        self._http.close()
+        self._dl.close()
 
     def _throttle(self):
         """state.json の last_request_ts を fcntl ロック下で読み書きし、最小間隔を保つ。
@@ -214,8 +221,9 @@ class Client:
             return r
 
     def download(self, url: str) -> bytes:
-        """S3 等の画像 URL を取得。Figma API の rate budget 対象外なので throttle しない。"""
-        r = self._http.get(url)
+        """S3/CDN の署名 URL を取得。PAT を載せない _dl で叩く (トークン外部流出を防ぐ)。
+        Figma API の rate budget 対象外なので throttle もしない。"""
+        r = self._dl.get(url)
         r.raise_for_status()
         return r.content
 
@@ -764,7 +772,7 @@ def main() -> int:
         args.func(None, args)
         return 0
     client = Client(args)
-    with contextlib.closing(client._http):
+    with contextlib.closing(client):
         args.func(client, args)
     return 0
 
