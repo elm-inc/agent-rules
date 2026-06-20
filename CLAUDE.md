@@ -216,6 +216,22 @@ Figma へのアクセスは **認証も用途も別の 2 経路**を使い分け
 | `/figma tokens <key\|url>` | Variables/Styles を design tokens 化 |
 | `/figma cache status` | キャッシュ統計・節約できたリクエスト数 |
 
+## 3D プリンタ造形 (build123d)
+
+build123d で 3D プリント向け造形を「書く→診断→視認→調整」で反復する。横断知識(規約・嵌合較正・診断・視覚 FB・環境)は `/cad-print` が媒介し、各プロジェクトは造形指示に集中する。
+根拠: [`docs/adr/0007`](docs/adr/0007-build123d-3d-printing-cad-skill.md) / 詳細: [`docs/design/cad-print-skill.md`](docs/design/cad-print-skill.md)
+
+- 診断(干渉/クリアランス/肉厚/オーバーハング/ビルドボリューム)は **skill 自前**(build123d/trimesh/OCP)。cad-khana は HLR 線画のみ optional(現状 pre-alpha 依存衝突で無効、将来 vendoring)
+- **嵌合較正は `fit()` で一点管理**(Bambu A1 mini / X2D / H2D × 素材の seed、実機は `calib gauge` で確定)。マジックナンバー禁止
+- 描画は既定 **matplotlib(GL 不要・確実)**、pyrender(GL)は opt-in。重い OCP env は初回オンデマンド構築(ADR-0005 方式)
+
+| スキル | 用途 |
+|--------|------|
+| `/cad-print init <dir>` | プロジェクト雛形展開(part.py / model.toml / calibration.toml) |
+| `/cad-print build <part.py>` | 診断 + シェーディング多視点 PNG + STL 出力(主ループ) |
+| `/cad-print check\|render\|export` | 診断のみ / 描画のみ / STEP・STL・3MF 出力 |
+| `/cad-print fit\|calib gauge` | 較正値の確認 / 実機較正ガウジ生成 |
+
 ## シェル環境 (モダン CLI ツール)
 
 Rust 製モダン CLI (`rg`, `fd`, `bat`, `eza`, `dust`, `btm`, `procs`, `delta`, `sd`, `hyperfine`, `tldr`, `jless`, `tokei`, `zoxide`) を使いこなすための仕組み。

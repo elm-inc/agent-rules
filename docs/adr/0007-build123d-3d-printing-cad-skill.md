@@ -2,8 +2,8 @@
 
 ## ステータス
 
-検討中
-<!-- 設計レビュー (/deepseek-redteam) と合意の後に「採択 (YYYY-MM-DD)」へ更新する -->
+採択 (2026-06-20)
+<!-- /deepseek-redteam レビュー + ユーザー合意済み。境界反転(診断は skill 自前)・スキル名 /cad-print 確定・多材は段階導入。対象機種 Bambu A1 mini / X2D / H2D。 -->
 
 ## 文脈
 
