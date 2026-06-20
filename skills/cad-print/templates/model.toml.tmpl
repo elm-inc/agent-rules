@@ -1,0 +1,12 @@
+# cad-print プロジェクト設定。part.py と同じディレクトリに置く。
+
+[printer]
+name = "A1mini"      # calibration.toml の [printer.*]: A1mini / X2D / H2D
+material = "PLA"     # A1mini: PLA/PETG/TPU、X2D・H2D: +ABS/ASA/PC/PA-CF
+
+[render]
+views = ["iso", "front", "top", "right"]   # 省略時は 4 面すべて
+size = 720
+
+[export]
+format = "stl"       # build の自動出力。step/stl/3mf。最終は `export --format` で個別指定可

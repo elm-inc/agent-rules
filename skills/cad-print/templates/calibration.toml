@@ -1,0 +1,149 @@
+# cad-print 嵌合較正テーブル (Bambu Lab A1 mini / X2D / H2D 既定 seed)
+#
+# 値の意味 (重要):
+#   clearance/sliding/friction = ラジアル(片側)ギャップ [mm]。嵌合面間に残したい距離。
+#   press                      = 負値 = 干渉量(片側)。圧入。hole() で穴を縮める / peg() でペグを太らす。
+#   → これらは「設計上の理想隙間」ではなく、その嵌合を実機で得るための経験オフセット
+#      (FDM の穴縮み等を織り込む)。実機ガウジ (`/cad-print calib gauge`) で確定し上書きする。
+#   elephant_foot_chamfer      = 底面に推奨する面取り [mm@45deg] (径計算には混ぜない)
+#   shrink_comp                = 線収縮率 (高温材)。全体寸法スケール補正に使用 (例 0.006 = 0.6%)
+#
+# 軸別にしたい場合は値をテーブルにできる: clearance = { xy = 0.12, z = 0.14 }
+
+default_printer = "A1mini"
+default_material = "PLA"
+
+# ===== Bambu A1 mini (オープン・単押出・180^3) =====
+[printer.A1mini]
+nozzle = 0.4
+enclosed = false
+extruders = 1
+build_volume = [180, 180, 180]
+
+[printer.A1mini.PLA]
+clearance = 0.12
+sliding = 0.08
+friction = 0.04
+press = -0.10
+elephant_foot_chamfer = 0.4
+
+[printer.A1mini.PETG]
+clearance = 0.15
+sliding = 0.10
+friction = 0.05
+press = -0.08
+elephant_foot_chamfer = 0.5
+
+[printer.A1mini.TPU]
+clearance = 0.20
+sliding = 0.15
+friction = 0.10
+press = -0.05
+elephant_foot_chamfer = 0.4
+
+# ===== Bambu X2D (密閉65C・デュアルノズル・256x256x260 / dual 235x235x250) =====
+[printer.X2D]
+nozzle = 0.4
+enclosed = true
+extruders = 2
+build_volume = [256, 256, 260]
+build_volume_dual = [235, 235, 250]
+
+[printer.X2D.PLA]
+clearance = 0.12
+sliding = 0.08
+friction = 0.04
+press = -0.10
+elephant_foot_chamfer = 0.4
+
+[printer.X2D.PETG]
+clearance = 0.15
+sliding = 0.10
+friction = 0.05
+press = -0.08
+elephant_foot_chamfer = 0.5
+
+[printer.X2D.ABS]
+clearance = 0.18
+sliding = 0.12
+friction = 0.06
+press = -0.10
+elephant_foot_chamfer = 0.5
+shrink_comp = 0.006
+
+[printer.X2D.ASA]
+clearance = 0.18
+sliding = 0.12
+friction = 0.06
+press = -0.10
+elephant_foot_chamfer = 0.5
+shrink_comp = 0.006
+
+[printer.X2D.PC]
+clearance = 0.20
+sliding = 0.13
+friction = 0.07
+press = -0.08
+elephant_foot_chamfer = 0.6
+shrink_comp = 0.007
+
+[printer.X2D."PA-CF"]
+clearance = 0.22
+sliding = 0.14
+friction = 0.07
+press = -0.08
+elephant_foot_chamfer = 0.6
+shrink_comp = 0.005
+
+# ===== Bambu H2D (密閉・デュアル押出・350x320x325) =====
+[printer.H2D]
+nozzle = 0.4
+enclosed = true
+extruders = 2
+build_volume = [350, 320, 325]
+
+[printer.H2D.PLA]
+clearance = 0.12
+sliding = 0.08
+friction = 0.04
+press = -0.10
+elephant_foot_chamfer = 0.4
+
+[printer.H2D.PETG]
+clearance = 0.15
+sliding = 0.10
+friction = 0.05
+press = -0.08
+elephant_foot_chamfer = 0.5
+
+[printer.H2D.ABS]
+clearance = 0.18
+sliding = 0.12
+friction = 0.06
+press = -0.10
+elephant_foot_chamfer = 0.5
+shrink_comp = 0.006
+
+[printer.H2D.ASA]
+clearance = 0.18
+sliding = 0.12
+friction = 0.06
+press = -0.10
+elephant_foot_chamfer = 0.5
+shrink_comp = 0.006
+
+[printer.H2D.PC]
+clearance = 0.20
+sliding = 0.13
+friction = 0.07
+press = -0.08
+elephant_foot_chamfer = 0.6
+shrink_comp = 0.007
+
+[printer.H2D."PA-CF"]
+clearance = 0.22
+sliding = 0.14
+friction = 0.07
+press = -0.08
+elephant_foot_chamfer = 0.6
+shrink_comp = 0.005

@@ -1,0 +1,58 @@
+"""cad-print プロジェクトの part.py 雛形。
+
+契約 (worker が読む):
+  - `part`  : 単一の build123d オブジェクト、または
+  - `parts` : {名前: build123d オブジェクト} の dict (複数部品/嵌合)
+  - `checks`: 任意。部品ペアの診断。
+        {"clearance": ["a", "b", 0.1]}      # 最小距離 ≥ 0.1mm
+        {"clearance": ["a", "b", "sliding"]}# 閾値を較正名で指定
+        {"interference": ["a", "b"]}        # 干渉してはいけない
+
+規約 (build123d):
+  - 単位 mm。寸法は dataclass に集約しマジックナンバーを避ける。
+  - 嵌合は fits の hole()/peg()/gap() を使う (較正値を一点管理)。
+  - selector は index でなく sort_by/group_by/filter_by + 位置で安定化。
+  - fillet/chamfer は最後に。
+"""
+from dataclasses import dataclass
+
+import build123d as bd
+from fits import peg, elephant_foot_chamfer  # 嵌合較正 (printer/material は model.toml で解決)
+
+
+@dataclass
+class Params:
+    base_w: float = 40.0
+    base_d: float = 40.0
+    base_h: float = 10.0
+    hole_d: float = 12.0   # 受け穴の設計直径
+    pin_h: float = 16.0    # base より高く = 挿入して頭が出る (視認しやすい)
+
+
+P = Params()
+
+# 受け穴の直径から、すべり嵌合になるピン径を導出 (peg = hole - 2*片側ギャップ)
+pin_d = peg(P.hole_d, "sliding")
+
+# --- base: 角板に貫通穴 ---
+base = bd.Box(P.base_w, P.base_d, P.base_h,
+              align=(bd.Align.CENTER, bd.Align.CENTER, bd.Align.MIN))
+base -= bd.Cylinder(radius=P.hole_d / 2, height=P.base_h,
+                    align=(bd.Align.CENTER, bd.Align.CENTER, bd.Align.MIN))
+
+# elephant foot 対策: 底面エッジに chamfer (径計算には混ぜない別処理)
+ef = elephant_foot_chamfer()
+if ef:
+    bottom_edges = base.edges().group_by(bd.Axis.Z)[0]  # 最下層エッジ = 接地面
+    base = bd.chamfer(bottom_edges, length=min(ef, 0.4))
+
+# --- pin: 穴に挿入されるピン (中心配置) ---
+pin = bd.Cylinder(radius=pin_d / 2, height=P.pin_h,
+                  align=(bd.Align.CENTER, bd.Align.CENTER, bd.Align.MIN))
+
+parts = {"base": base, "pin": pin}
+
+checks = [
+    {"clearance": ["base", "pin", 0.05]},  # すべり嵌合の隙間が最低 0.05mm 残るか
+    {"interference": ["base", "pin"]},      # 干渉していないこと
+]
