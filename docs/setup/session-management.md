@@ -61,7 +61,7 @@ Claude 側を整えても、zellij のセッションが別レイヤーで溜ま
 運用:
 
 - **ハブは session-manager** (`Ctrl+o w`): 全セッションを一覧・切替・kill。`claude agents` と同じ「窓を巡回しない・ハブで見る」発想を端末側にも適用する
-- **命名で増殖を止める**: 裸の `zellij` 起動はランダム名 (`kind-panda` 等) を量産し、attach せず再起動すると `scm` / `scm-2` のような重複ができる。`zj [名]` (= `zellij attach --create`、引数省略時はカレントディレクトリ名) で **プロジェクト = セッション 1 つ**に集約
+- **命名で増殖を止める**: 裸の `zellij` 起動はランダム名 (`kind-panda` 等) を量産し、attach せず再起動すると `scm` / `scm-2` のような重複ができる。`zj [名]` (= `zellij attach --create`、引数省略時はカレントディレクトリ名) で **プロジェクト = セッション 1 つ**に集約。さらに**裸 `zellij` (引数なし) 自体も関数ラップで `zj` に流す**ので、`zj` と打たなくても cwd 名セッションに集約される。`list-sessions` 等サブコマンド付きは素通し、ランダム名で新規が欲しいときだけ `command zellij`
 - **worktree を別タブで着手 (引き継ぎ付き)**: `/worktree-start <名> <説明> --tab` で worktree を cwd にした zellij 新タブを開き、cd して**引き継ぎドキュメント** (`<共有.git>/worktree-tasks/<ID>-<名>.md` に ID 付きで集約・永続) を初期プロンプトに渡して `claude` を自動起動。子が親の意図・方針を引き継いで着手する。別 zellij セッションより軽い「真の並列」着手
 - **死骸を一掃**: `zjreap` (= `zellij delete-all-sessions -y`) は **EXITED だけ削除し実行中は触らない** (安全)。個別 kill は `zellij kill-session <名>`
 - **そもそも溜めたくない場合**: `~/.config/zellij/config.kdl` で `session_serialization false` にすると EXITED を残さない (resurrect 機能は失う)
