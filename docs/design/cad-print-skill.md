@@ -77,33 +77,54 @@ skills/cad-print/
 
 ## 6. 嵌合較正(skill 所有・中核)
 
-### データモデル `calibration.toml`
+### 対象プリンタ(確定)
+Bambu Lab **A1 mini / X2D / H2D** をターゲットとする。いずれも 0.4mm ノズル既定・寸法精度が高い(=FDM の中ではタイト寄りの seed)。プリンタごとに**ビルドボリューム・筐体・押出器**をレジストリに持つ。
+
+| プリンタ | 筐体 | 押出 | ビルドボリューム(mm) | 主素材(seed 対象) |
+|---|---|---|---|---|
+| A1 mini | オープン(非加熱) | 単 | 180×180×180 | PLA / PETG / TPU |
+| X2D | 密閉 65℃ | デュアルノズル | 256×256×260(単) / 235×235×250(デュアル) | PLA / PETG / ABS / ASA / PC / PA-CF |
+| H2D | 密閉 | デュアル押出 | 350×320×325 | PLA / PETG / ABS / ASA / PC / PA-CF |
+
+### データモデル `calibration.toml`(Bambu seed)
 ```toml
-# 既定 seed (調査の実数)。実機較正で上書きする。
-[printer."generic_FDM".PLA]
+[printer."A1mini"]
 nozzle = 0.4
-fit.clearance = 0.20   # per side, 緩い (自由可動)
-fit.sliding   = 0.10
-fit.friction  = 0.05
-fit.press     = -0.10  # 圧入 (穴を縮める)
-elephant_foot = 0.15
+enclosed = false
+build_volume = [180, 180, 180]
+[printer."A1mini".PLA]
+fit = { clearance = 0.12, sliding = 0.08, friction = 0.04, press = -0.10 }
+elephant_foot_chamfer = 0.4        # 径オフセットでなく底面 chamfer (mm@45°)
+[printer."A1mini".PETG]
+fit = { clearance = 0.15, sliding = 0.10, friction = 0.05, press = -0.08 }
+elephant_foot_chamfer = 0.5
+[printer."A1mini".TPU]
+fit = { clearance = 0.20, sliding = 0.15, friction = 0.10, press = -0.05 }
 
-[printer."generic_FDM".PETG]
+[printer."X2D"]
 nozzle = 0.4
-fit.clearance = 0.25
-fit.sliding   = 0.13
-fit.friction  = 0.07
-fit.press     = -0.08
-elephant_foot = 0.20
+enclosed = true
+extruders = 2                      # デュアルノズル → 可溶性サポート/多材
+build_volume = [256, 256, 260]     # デュアル時 235×235×250
+[printer."X2D".PLA]
+fit = { clearance = 0.12, sliding = 0.08, friction = 0.04, press = -0.10 }
+[printer."X2D".ABS]                 # 密閉で高温材可。収縮大 → クリアランス広め + 収縮補正
+fit = { clearance = 0.18, sliding = 0.12, friction = 0.06, press = -0.10 }
+shrink_comp = 0.006                # 線収縮率 (~0.4-0.8%)。寸法スケール補正に使用
+[printer."X2D"."PA-CF"]
+fit = { clearance = 0.22, sliding = 0.14, friction = 0.07, press = -0.08 }
+shrink_comp = 0.005
 
-[printer."generic_SLA".resin]
-fit.clearance = 0.10
-fit.sliding   = 0.06
-fit.friction  = 0.03
-fit.press     = -0.05
-elephant_foot = 0.0
+[printer."H2D"]                     # X2D とほぼ同傾向 + 大型 (350×320×325)
+nozzle = 0.4
+enclosed = true
+extruders = 2
+build_volume = [350, 320, 325]
+# 素材エントリは X2D と同 seed (PLA/PETG/ABS/ASA/PC/PA-CF)
 ```
-> 既定値は調査ベースの**安全寄り出発点**(FDM は穴が縮む傾向)。プリンタ実機は `calib gauge` で確定し上書きする。ユーザー固有プリンタは `[printer."<名>".<素材>]` を追加。
+- **軸別**(`fit.clearance.xy` / `.z`)も許容(XY/Z 異方性)。seed はまず等方、較正で分離。
+- 値は**安全寄り seed**。実機は `calib gauge` で確定し上書き。
+- `shrink_comp`(高温材の線収縮)と `elephant_foot_chamfer`(底面)を `fit` と**分離**して管理(径計算に混ぜない)。
 
 ### `fits.py`(モデルが import)— セマンティクスを明示(レッドチーム反映)
 **較正値は「設計上のクリアランス」ではなく、実機ガウジで実測した経験オフセット**(FDM の「穴が縮む」分を織り込んだ、その嵌合を得るために CAD 寸法へ与えるべき差分)と定義する。符号と適用先を曖昧にしない。
@@ -142,7 +163,11 @@ g      = gap(fit="sliding", axis="z")         # リブ/蓋の片側ギャップ�
 - **クリアランス**: `a.distance_to(b)`(OCCT, 堅牢)。閾値は `fit()` 名で指定可。
 - **肉厚**: **trimesh voxel/SDF を主**(内接距離)で評価し、ray は補助。**細リブ/テーパーは ray が逸れて過大評価しがち**なので、サンプル分散が大きい/局所最小が閾値近傍の箇所を **"要目視" フラグ**で明示。素材/ノズルから既定 `wall_min`(例 FDM 0.4mm → ≈2×ライン幅)。
 - **オーバーハング**: 三角法線×ビルド方向で角度算出(標準手法)、`overhang_max_deg` 既定は素材依存。
-- 出力は skill 正規化スキーマ `diagnostics.json`(parts: bbox/volume/area/com/validity、interferences、clearances、wall、overhang、各 assertion は **measured/threshold/margin/passed**)。
+- **ビルドボリューム超過**: 部品 bbox を対象プリンタの `build_volume` と照合(**A1 mini は 180³ と小さく超過しやすい**)。超過は fail。デュアルノズル機(X2D)はデュアル時の縮小値も考慮。
+- 出力は skill 正規化スキーマ `diagnostics.json`(parts: bbox/volume/area/com/validity、interferences、clearances、wall、overhang、fits_in_volume、各 assertion は **measured/threshold/margin/passed**)。
+
+### デュアルノズル/多材(X2D・H2D)
+- 可溶性サポート/多材プリントでは**材料ペア間のクリアランス**(造形材⇔サポート材の界面)や色境界が関わる。第一段は単材を主とし、**多材の材料ペア clearance とサポート界面チェックは段階的に追加**(Assembly での材料割当 + ペア別 `fit`)。
 
 ### cad-khana(optional・vendored + pin)
 - **`khana draw`** の HLR 線画(§8)。**vendored**(使う部分のみ取り込み)+ コミット pin。
@@ -224,6 +249,7 @@ g      = gap(fit="sliding", axis="z")         # リブ/蓋の片側ギャップ�
 
 - スキル名 `/cad-print` で確定か(`/cad`・`/b123d` 等)。
 - `model.toml` の宣言的 assert DSL を入れるか、Python 直書きに留めるか。
-- 既定較正の初期エントリ(実プリンタ/素材)。**ユーザーのプリンタ/素材を確認して seed する。**
+- ~~既定較正の初期エントリ(実プリンタ/素材)~~ → **確定: Bambu A1 mini / X2D / H2D**(§6 に seed 済み)。素材は機種能力に合わせ A1 mini=PLA/PETG/TPU、X2D/H2D=+ABS/ASA/PC/PA-CF。
 - 描画の既定視点セットと解像度。
 - cad-khana の pin 方針(タグ無し → コミット固定 / fork するか)。
+- デュアルノズル多材(X2D/H2D)の材料ペア clearance を第一段に含めるか、段階導入か。
