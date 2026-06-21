@@ -1,0 +1,7 @@
+# direnv: .newrelic-profile が指す profile を環境に export する。
+# これにより .mcp.json の ${NEW_RELIC_API_KEY} が「その repo の顧客の鍵」に解決され、
+# 対話 (MCP) と skill が同じテナントを指す (ADR-0008 §A の env バインド)。
+# 使い方: このファイルを repo 直下に置き `direnv allow`。.gitignore 済み。
+set -a
+source "$HOME/.newrelic/$(cat .newrelic-profile).env"
+set +a
