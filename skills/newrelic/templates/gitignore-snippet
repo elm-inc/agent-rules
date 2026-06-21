@@ -1,0 +1,4 @@
+# New Relic (顧客名/鍵の漏洩防止 — ADR-0008 §D/§F)
+.newrelic-profile
+.envrc
+*.nrql.local

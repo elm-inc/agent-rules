@@ -216,6 +216,27 @@ Figma へのアクセスは **認証も用途も別の 2 経路**を使い分け
 | `/figma tokens <key\|url>` | Variables/Styles を design tokens 化 |
 | `/figma cache status` | キャッシュ統計・節約できたリクエスト数 |
 
+## New Relic 連携 (案件=別顧客テナント)
+
+受託では案件ごとに**別顧客の New Relic テナント**を触る。間違ったテナントへのクエリ=顧客データ混線 (gh の `_chd` 事故と同型)。**いまどの顧客アカウントを見ているかを常に明示・検証可能にし、暗黙の既定に倒さない (fail-closed)** を最優先する。**認証も用途も別の 2 経路**を使い分ける。
+根拠: [`docs/adr/0008`](docs/adr/0008-newrelic-connection-hybrid.md) / 詳細: [`docs/design/newrelic-skill.md`](docs/design/newrelic-skill.md)
+
+| 経路 | 認証 | 向き |
+|---|---|---|
+| `/newrelic` スキル (NerdGraph 直) | profile `~/.newrelic/<名>.env` (600) | ヘッドレス/バッチ/CI/**複数顧客横断**。`--profile` 明示でテナント取り違えを防ぎ、レート/リージョン/監査を制御 |
+| per-project 公式リモート MCP | User Key (`NRAK-*`) / OAuth | **単一テナント repo の対話探索**。NRQL/ダッシュボード/アラートの NR メンテ tool surface |
+
+- 横断・共有 repo は MCP に頼らず `/newrelic --profile` を呼び出し毎に使う。per-project MCP は `/newrelic init` が `.newrelic-profile` から `.mcp.json` を生成 (手書き禁止)。**New Relic MCP は global 登録しない** (付け忘れ=接続不能で fail-closed)。
+- `.newrelic-profile`・`.envrc` は **commit しない** (`.gitignore`、顧客名漏洩防止)。鍵は argv に出さず profile ファイルから読む。
+- MCP 接続後・不安時は `/newrelic doctor` で「MCP と skill が同一顧客を指す」三者一致を検証してから対話する。リージョンは US 既定・EU 切替。
+
+| スキル | 用途 |
+|--------|------|
+| `/newrelic whoami\|doctor` | 鍵が見える account/region の確認 / 三者一致検証 |
+| `/newrelic nrql "<NRQL>"` | NerdGraph で NRQL 実行 (account は profile から) |
+| `/newrelic entities\|dashboards\|alerts` | エンティティ/ダッシュボード/アラート参照 |
+| `/newrelic init [dir] --profile <名>` | 案件 repo の雛形展開 (.newrelic-profile + .mcp.json + .gitignore) |
+
 ## 3D プリンタ造形 (build123d)
 
 build123d で 3D プリント向け造形を「書く→診断→視認→調整」で反復する。横断知識(規約・嵌合較正・診断・視覚 FB・環境)は `/cad-print` が媒介し、各プロジェクトは造形指示に集中する。
