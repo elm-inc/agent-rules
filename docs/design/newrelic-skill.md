@@ -1,6 +1,6 @@
 # 設計: `/newrelic` — New Relic 接続 (per-project MCP + skill ハイブリッド)
 
-- ステータス: ドラフト (レビュー前)。決定の根拠は [ADR-0008](../adr/0008-newrelic-connection-hybrid.md) (+ /deepseek-redteam 追記 §A–G)
+- ステータス: 実装済み (PR #11)。決定の根拠は [ADR-0008](../adr/0008-newrelic-connection-hybrid.md) (採択 + /deepseek-redteam 追記 §A–G)。実機検証 TODO は §11 + GitHub Issue
 - 関連: Figma 接続 (REST skill + リモート MCP) の前例。実装は `skills/figma/scripts/figma.py` のスロットル/バックオフ/設定解決を踏襲
 
 ## 1. 目的 / 非目的
