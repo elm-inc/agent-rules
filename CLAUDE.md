@@ -95,6 +95,8 @@
 
 軽微な変更では `/local-review` + pre-commit のみで十分。
 
+> **ローカル LLM (vLLM) は普段停止しているのが正常** (オンデマンド起動: [`docs/adr/0005`](docs/adr/0005-on-demand-local-llm.md))。`/local-review`・`/test-generate`・`/test-data` は実行時に `ensure-vllm.sh` で自動起動する (初回ロード 1-2 分、アイドル 15 分で自動停止)。**「vLLM が停止しているのでローカルレビューを中止」は誤り** — 停止は既定状態であって利用不可ではない。自前で `:8000` を叩いて落ちていても中止せず、スキル経由で起動して続行する。本当に起動できないとき (GPU 専有等) のみ `/codex-review` に切り替える。
+
 ### セットアップ・トラブル対処
 
 - ローカル LLM (vLLM) 起動: [`docs/setup/local-llm.md`](docs/setup/local-llm.md)。API キーは `scripts/env-snippet.sh` (`~/.*_token` 方式)

@@ -1,6 +1,6 @@
 ---
 name: local-review
-description: ローカル LLM (Qwen2.5-Coder-32B / vLLM) で差分の0次レビューを行う。コミット直前の雑なミス検出に使う。/codex-review より前段で安価・高速。秒オーダーで終わる
+description: ローカル LLM (Qwen2.5-Coder-32B / vLLM) で差分の0次レビューを行う。コミット直前の雑なミス検出に使う。/codex-review より前段で安価・高速。秒オーダーで終わる。vLLM は普段停止しておりスキルが自動起動するため「停止中」でも実行可 (停止=利用不可ではない)
 argument-hint: "[対象指定（例: --base main, --uncommitted, --commit <sha>） + 追加観点]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh*)
