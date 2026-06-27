@@ -249,33 +249,44 @@ def detect_current(all_stats, servers):
         if t in pts_to_mosh:
             return pts_to_mosh[t]
 
-    # 2. multiplexer 経由 (zellij)
-    session_name = None
-    for a in ancestors:
-        cl = _cmdline(a)
-        m = re.search(r"zellij\s+--server\s+\S+/([^/\s]+)\s*$", cl)
-        if m:
-            session_name = m.group(1)
-            break
+    # 2. multiplexer 経由 (zellij): セッション名で厳密に current を特定する
+    session_name = os.environ.get("ZELLIJ_SESSION_NAME")
+    if not session_name:
+        for a in ancestors:
+            m = re.search(r"zellij\s+--server\s+\S+/([^/\s]+)\s*$", _cmdline(a))
+            if m:
+                session_name = m.group(1)
+                break
     if session_name:
-        for pid, st in all_stats.items():
+        for pid in all_stats:
             cl = _cmdline(pid)
             toks = cl.split()
-            # session 名は引数トークンとして完全一致で照合 (例: agent-rules を agent-rules-vt に誤一致させない)
+            # session 名は引数トークン完全一致で照合 (agent-rules を agent-rules-vt に誤一致させない)
             if "zellij" in cl and "attach" in toks and session_name in toks:
                 t = _tty_of(pid)
                 if t in pts_to_mosh:
                     return pts_to_mosh[t]
 
-    # 2'. multiplexer 経由 (tmux, best-effort)
-    in_tmux = any("tmux" in _cmdline(a) for a in ancestors)
-    if in_tmux:
-        for pid, st in all_stats.items():
-            cl = _cmdline(pid)
-            if re.search(r"\btmux\b.*\battach", cl) or re.search(r"\btmux\b.*\b-CC?\b", cl):
+    # 3. multiplexer 経由 (tmux): $TMUX があれば tmux 自身に現在クライアントの tty を聞く。
+    #    attach / new -A / new-session -A / -CC のどの起動形でも権威的に特定できる。
+    #    停止後の leftover mosh にも stale な tmux client が残るため、cmdline パターン推測では
+    #    誤検出しうる (それで current を取り違えると本物の current を保護できない)。よって使わない。
+    if os.environ.get("TMUX"):
+        tty = _run(["tmux", "display-message", "-p", "#{client_tty}"]).strip()
+        pts = tty[len("/dev/") :] if tty.startswith("/dev/") else None
+        if pts in pts_to_mosh:
+            return pts_to_mosh[pts]
+        # フォールバック (tmux に聞けない時のみ): pts 上の tmux クライアントから一意に定まる時だけ採用。
+        # 曖昧な (複数候補) ときは None を返し、「current 不明」として人間に source/idle 確認を促す。
+        cand = set()
+        for pid in all_stats:
+            c = _comm(pid)
+            if "tmux" in c and "server" not in c:
                 t = _tty_of(pid)
                 if t in pts_to_mosh:
-                    return pts_to_mosh[t]
+                    cand.add(pts_to_mosh[t])
+        if len(cand) == 1:
+            return next(iter(cand))
     return None
 
 
