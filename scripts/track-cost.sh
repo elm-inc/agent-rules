@@ -58,9 +58,20 @@ else
 fi
 echo ""
 
+# Claude (Opus = セッションモデル/実質 1x, Fable 5 = 従量課金)。
+# Fable の実費は transcript (~/.claude/projects/**/*.jsonl) から自動集計する (fable-usage.sh)。
+echo "--- Claude / Fable 5 (従量課金の実費) ---"
+FABLE_SH="$(dirname "$0")/fable-usage.sh"
+if [ -x "$FABLE_SH" ]; then
+  "$FABLE_SH" --month "$MONTH" | sed 's/^/  /'
+else
+  echo "  (scripts/fable-usage.sh なし、SKIP)"
+fi
+echo ""
+
 # シェル履歴からスキル呼び出し回数を集計 (zsh/bash 共通)
-# 注: Claude Code TUI から呼んだスキルはここに出ない (シェル経由のみカウント)
-#     Claude Code 履歴は ~/.claude/projects/*/conversations/ から抽出可能 (将来実装)
+# 注: Claude Code TUI から呼んだスキルはここに出ない (シェル経由のみカウント)。
+#     Fable の実費は上の fable-usage.sh が transcript から拾うのでこの限界の影響を受けない。
 echo "--- スキル使用頻度 (シェル履歴から推定 — TUI 呼び出しは含まれない) ---"
 HISTFILE_CANDIDATES=(~/.zsh_history ~/.bash_history)
 for f in "${HISTFILE_CANDIDATES[@]}"; do
