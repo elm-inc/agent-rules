@@ -51,6 +51,22 @@ out="${CY}${model}${RST}"
 if [ -n "$ctx" ]; then out="${out}${S}ctx ${ctx%.*}%"; else out="${out}${S}ctx ${DIM}--%${RST}"; fi
 out="${out}${S}5h $(colpct "$five")${DIM} / ${RST}7d $(colpct "$seven")"
 out="${out}${S}${vllm}"
+
+# Fable 当月実費 (従量課金の計器)。fable-usage.sh がキャッシュから即返す (重い走査は裏で throttle)。
+# Fable を当月使っていなければ (実費 0) 表示しない — 平時はステータスラインを汚さない。
+fu="$(dirname "${BASH_SOURCE[0]}")/fable-usage.sh"
+[ -x "$fu" ] || fu="$HOME/repos/github.com/elm-inc/agent-rules/scripts/fable-usage.sh"
+if [ -x "$fu" ]; then
+  read -r fcost fbudget < <("$fu" --statusline 2>/dev/null)
+  if [ -n "${fcost:-}" ] && [ "$fcost" != "NA" ] && [ "${fcost:-0}" -gt 0 ] 2>/dev/null; then
+    fpct=0; [ "${fbudget:-0}" -gt 0 ] 2>/dev/null && fpct=$(( fcost * 100 / fbudget ))
+    if   [ "$fpct" -ge 100 ]; then fc="$RED"
+    elif [ "$fpct" -ge 70 ];  then fc="$YEL"
+    else                           fc="$GRN"; fi
+    out="${out}${S}🧠F ${fc}\$${fcost}${RST}${DIM}/${fbudget}${RST}"
+  fi
+fi
+
 [ -n "$branch" ] && out="${out}${S}⎇ ${branch}"
 
 printf '%s\n' "$out"

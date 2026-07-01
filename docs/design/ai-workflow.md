@@ -144,12 +144,15 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 
 ### 月別コスト集計
 
-`scripts/track-cost.sh` で集計 (Phase 6 雛形)。
+`scripts/track-cost.sh` で集計 (Phase 6 雛形)。**Fable 5 は `scripts/fable-usage.sh` が transcript から自動集計** (2026-07-07〜 従量課金。予算 $100/月・開発者1人。根拠: ADR-0010)。
 
-| 月 | Gemini | DeepSeek | 合計 |
-|---|---|---|---|
-| 2026-05 | TBD | TBD | TBD |
-| 2026-06 | TBD | TBD | TBD |
+| 月 | Fable 5 | Gemini | DeepSeek | 合計 |
+|---|---|---|---|---|
+| 2026-05 | — | TBD | TBD | TBD |
+| 2026-06 | ~$595 ⚠️ | TBD | TBD | TBD |
+| 2026-07 | TBD (7/7〜 従量課金) | TBD | TBD | TBD |
+
+> **⚠️ 2026-06 の Fable ~$595 は約 3 日 (6/10〜6/13、6/12 の利用停止まで) の複数プロジェクト横断利用による実測** (`fable-usage.sh --month 2026-06`)。予算 $100/月なら 1 日で超過する規模で、厳選 + モニタリング (ADR-0010) の必要性を裏付ける実データ。7 月以降はこれが実費として請求される。
 
 ### ROI 判定 (3 ヶ月後)
 
