@@ -173,6 +173,7 @@ multi-LLM オーケストレーションは独自拡張だが、Claude 単体の
 | `docs/adr/` | Architecture Decision Records (なぜ・何を決めたか) |
 | `docs/architecture/` | C4 model (L1 Context → L4 Code) + 状態/シーケンス/依存図 |
 | `docs/design/` | 実装計画・仕様 |
+| `docs/_templates/` | **メタ** (記入用ひな形)。ドキュメント本体ではない |
 
 | スキル | 用途 |
 |--------|------|
