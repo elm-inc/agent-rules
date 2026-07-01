@@ -26,20 +26,24 @@ git rev-parse --show-toplevel
 コピー元: `/home/elmo/repos/github.com/elm-inc/agent-rules/templates/docs/`
 コピー先: `<repo-root>/docs/`
 
-ディレクトリ単位でコピー。既存ファイルは:
-- デフォルト: スキップしてログ出力
-- `--force` 指定時: 上書き
+ディレクトリ単位でコピー。**メタ (`_` 接頭辞) と中身で扱いを分ける**:
+
+- **メタ** (`_templates/` 配下のひな形): 単一ソースに追従させるため**常に上書き同期**する (ユーザーが書き換える対象ではない)
+- **中身・ガイド** (`README.md`・`cheatsheet.md` 等の連番/通常名): 既存があれば**スキップしてログ出力**。`--force` 指定時のみ上書き
 
 展開対象:
 
 ```
 docs/README.md
+docs/_templates/README.md      # メタ: 常に上書き
+docs/_templates/adr.md         # メタ: 常に上書き (ADR の空フォーム)
 docs/adr/README.md
-docs/adr/0000-template.md
 docs/architecture/README.md
 docs/architecture/cheatsheet.md
 docs/design/README.md
 ```
+
+> ひな形 (空フォーム) は `docs/adr/` 等のコンテンツ列に置かず `docs/_templates/` に隔離する。これで「ひな形か実ドキュメントか」がパスで判別でき、誤認・誤編集を防ぐ。`/adr-new` はこの `_templates/adr.md` を読んで採番展開する。
 
 ### 3. 結果サマリ
 - 作成したファイル一覧

@@ -32,7 +32,12 @@ ls docs/adr/[0-9]*.md 2>/dev/null \
 - ファイル名: `docs/adr/NNNN-<kebab-title>.md`
 
 ### 3. テンプレ取得
-`/home/elmo/repos/github.com/elm-inc/agent-rules/templates/docs/adr/0000-template.md` を読み、以下を置換:
+ひな形 (空フォーム) を読み込む。優先順位:
+
+1. プロジェクトローカルの `docs/_templates/adr.md` (あれば。`/docs-init` が展開済み)
+2. なければ agent-rules 正本 `/home/elmo/repos/github.com/elm-inc/agent-rules/templates/docs/_templates/adr.md`
+
+読み込んだら以下を置換:
 
 - `ADR-NNNN` → `ADR-<採番>`
 - `タイトル` → `<引数で渡された日本語タイトル>`

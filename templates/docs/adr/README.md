@@ -18,6 +18,8 @@ ls docs/adr/[0-9]*.md 2>/dev/null | sed -n 's|.*/0*\([0-9]*\)-.*|\1|p' | sort -n
 
 `/adr-new <title>` スキルで自動採番＋テンプレ展開できる。
 
+ひな形 (空フォーム) は [`../_templates/adr.md`](../_templates/adr.md)。**これ自体は ADR ではなく連番にも数えない** (上の採番グロブ `[0-9]*.md` は連番ファイルだけを対象とするので自動的に除外される)。手動で起こす場合は `_templates/adr.md` を `NNNN-<kebab-title>.md` にコピーして記入する。
+
 ## 索引
 
 (各プロジェクトでここに追記)

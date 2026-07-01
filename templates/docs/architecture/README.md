@@ -27,5 +27,5 @@ C4 model + 補足図でアーキテクチャを表現。Mermaid 記述、GitHub 
 ## 運用
 
 - **設計変更時の更新順**: ADR (なぜ) → architecture (どう動くか) → コード (実装)
-- **drift 検出**: 大きな変更後に `/docs-sync` スキルで図とコードのズレを確認
+- **drift 検出**: 大きな変更後は `/docs-visualize --force` でコードから図を再生成し、既存図とのズレを確認する
 - **議論の起点**: PR レビューで Mermaid 図が GitHub 上でレンダリングされ、視覚的にレビュー可能
