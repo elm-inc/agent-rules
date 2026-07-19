@@ -79,3 +79,10 @@ Fable を「厳選 (A) × 可視化 (B) × 人手ゲート (C)」で運用する
 - [ADR-0001](0001-multi-llm-development-workflow.md) — 多層・多モデルワークフロー (本 ADR は Fable 枠のコスト規律を追加)
 - [ADR-0006](0006-orchestration-methods.md) — サブエージェント委譲で Fable を局所化する方針
 - [ADR-0005](0005-on-demand-local-llm.md) — コストを起点にした運用設計 (オンデマンド起動) の思想
+
+## 改訂履歴
+
+- **2026-07-20 追記 (従量課金開始日の変更)**: 本 ADR 採択時 (2026-07-03) の通知では従量課金開始は **7/7** だったが、その後 Anthropic が included (無償) アクセスを **2 回延長** (→ 7/12 → 7/19) し、実費 (usage credits) の開始は **2026-07-20** になった。included 期間 (7/1〜7/19) は週次プラン上限の **50% まで無償**。
+  - 影響: 本文の「7/7」は採択時点の記録として残す。運用ドキュメント (CLAUDE.md / `fable-usage.sh` / 両 fable スキル / ai-workflow.md §8) は 7/20 に更新済み。
+  - `fable-usage.sh` の当月推定は全トークンを課金対象とみなす**上限見積り**。included 期間 (〜7/19) の利用は credit 課金外なので、7 月前半の推定 $ は実費ではない (実費の正は Console)。
+  - 背景 (最新報道): 輸出管理は 6/12 適用 → 6/30 解除 (19 日間) → 7/1 全世界再開。単価 $10/$50 per MTok は不変。cyber/bio/distillation 関連は Opus 4.8 にルーティング。出典: [Anthropic 公式](https://www.anthropic.com/news/redeploying-fable-5) / [延長報道 (7/19 まで)](https://cybersecuritynews.com/anthropic-extends-claude-fable-5-access/)

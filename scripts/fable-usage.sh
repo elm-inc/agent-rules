@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Fable 5 の当月利用実費を Claude Code の transcript から集計する。
-# 7/7 の従量課金移行に伴い「Fable = 実費」を可視化し過剰利用を抑えるための計器。
+# 従量課金移行 (included 無償枠は 2026-07-19 まで / 実費 credits は 2026-07-20 開始) に伴い
+# 「Fable = 実費」を可視化し過剰利用を抑えるための計器。
 # 根拠: docs/adr/0010-fable-metered-billing-controls.md
 #
 # 使い方:
@@ -142,6 +143,7 @@ case "$MODE" in
     fi
     echo ""
     echo "  ※ ローカル transcript ベースの推定。正確な請求は Console: https://console.anthropic.com/settings/usage"
+    echo "  ※ included 無償枠は 2026-07-19 まで。7/20 より前の利用は credit 課金外なので、当月推定は上限見積り (実費はこれ以下)。"
     echo "  ※ 結果は docs/design/ai-workflow.md §8 の Fable 行に転記する。"
     ;;
 esac

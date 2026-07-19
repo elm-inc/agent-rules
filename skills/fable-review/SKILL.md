@@ -12,7 +12,7 @@ allowed-tools: Agent Bash(git *) Bash(cat *) Read
 
 ## コスト前提 (乱用しない)
 
-> 💰 **2026-07-07〜 従量課金**: Fable 5 は $10/$50 per MTok (Opus 4.8 の 2 倍)。7/7 以降は **Max クォータではなく実費 (ドル)** が出る。当月実費は `scripts/fable-usage.sh` で可視化 (statusline にも当月累計 $ を表示)、予算 (既定 $100/月) 超過後は起動前に要否を都度確認する (人手ゲート・ブロックはしない)。根拠: [ADR-0010](../../docs/adr/0010-fable-metered-billing-controls.md)。
+> 💰 **2026-07-20〜 従量課金**: Fable 5 は $10/$50 per MTok (Opus 4.8 の 2 倍)。included 無償枠は 7/19 まで、**7/20 以降は Max クォータではなく実費 (ドル)** が出る (当初 7/7 予定が延長された)。当月実費は `scripts/fable-usage.sh` で可視化 (statusline にも当月累計 $ を表示)、予算 (既定 $100/月) 超過後は起動前に要否を都度確認する (人手ゲート・ブロックはしない)。根拠: [ADR-0010](../../docs/adr/0010-fable-metered-billing-controls.md)。
 
 日常の差分は `/local-review` → `/codex-review` で回し、本スキルは「品質が下流に大きく波及する変更の最終レビュー」= **最後の砦**に限定する。以下に該当する変更で使う:
 
