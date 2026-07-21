@@ -1,0 +1,38 @@
+/* docs-publish 既定テーマ (A4・日本語対応・mermaid 中央寄せ・章ごと改ページ)。
+   フォントは --font で差し替え可能。CSS 変数 --doc-font を script が上書きする。
+   別テーマを使う場合は --theme <file.css> でこのファイルごと差し替える。 */
+:root { --doc-font: "Noto Sans CJK JP","Noto Sans",sans-serif; }
+@page { size: A4; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; }
+.doc {
+  font-family: var(--doc-font);
+  font-size: 10pt; line-height: 1.6; color: #1a1a1a; word-wrap: break-word;
+}
+.doc h1 { font-size: 20pt; border-bottom: 3px solid #2f3b52; padding-bottom: 6px; margin: 0 0 14px; }
+.doc h2 { font-size: 15pt; color: #2f3b52; border-bottom: 1.5px solid #8892a6; padding-bottom: 4px; margin: 20px 0 10px; break-before: page; }
+.doc h3 { font-size: 12.5pt; margin: 16px 0 7px; color: #223; }
+.doc h4 { font-size: 11pt; margin: 12px 0 6px; color: #334; }
+.doc h5, .doc h6 { font-size: 10.5pt; margin: 10px 0 5px; color: #445; }
+.doc p, .doc li { orphans: 2; widows: 2; }
+.doc ul, .doc ol { margin: 6px 0; padding-left: 22px; }
+.doc li { margin: 2px 0; }
+.doc a { color: #0b5cad; text-decoration: none; }
+.doc strong { font-weight: 700; }
+.doc code { font-family: "DejaVu Sans Mono","Noto Sans Mono",monospace; font-size: 0.85em; background: #eef1f4; padding: 1px 4px; border-radius: 3px; overflow-wrap: break-word; }
+.doc pre { background: #f6f8fa; border: 1px solid #e1e4e8; border-radius: 6px; padding: 10px 12px; font-size: 0.82em; line-height: 1.45; overflow: auto; break-inside: avoid; }
+.doc pre code { background: none; padding: 0; font-size: 1em; }
+.doc blockquote { margin: 8px 0; padding: 4px 12px; border-left: 4px solid #cbd5e0; color: #445; background: #f8fafc; }
+.doc hr { border: none; border-top: 1px solid #dde1e6; margin: 16px 0; }
+/* tables */
+.doc table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 9pt; table-layout: auto; }
+.doc th, .doc td { border: 1px solid #c4ccd4; padding: 5px 7px; text-align: left; vertical-align: top; overflow-wrap: break-word; word-break: normal; line-break: strict; }
+.doc th { background: #e9eef3; font-weight: 600; }
+.doc thead { display: table-header-group; }
+.doc tr { break-inside: avoid; }
+.doc tbody tr:nth-child(even) { background: #fafbfc; }
+/* mermaid */
+.mermaid-wrap { break-inside: avoid; text-align: center; margin: 14px 0; }
+pre.mermaid { background: none; border: none; padding: 0; text-align: center; font-family: var(--doc-font); }
+pre.mermaid svg { max-width: 100%; max-height: 245mm; height: auto; }

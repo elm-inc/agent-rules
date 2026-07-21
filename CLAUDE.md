@@ -182,6 +182,7 @@ multi-LLM オーケストレーションは独自拡張だが、Claude 単体の
 | `/docs-init` | 新プロジェクトに docs/ 標準構造を展開 |
 | `/docs-visualize` | C4 + 状態機械 + シーケンスで可視化 |
 | `/adr-new <題>` | 通し番号自動採番で ADR 作成 |
+| `/docs-publish pdf\|docx <md>` | Markdown を mermaid 図を保持したまま PDF/Word に変換 (人間向け配布。ADR-0012) |
 
 - **ADR 運用**: ファイル名 `NNNN-kebab-case.md` (欠番なし)、採択済みは書き換えず新規 ADR で Supersede、採択日は ISO 形式
 - **更新順**: ADR (なぜ) → architecture (どう動くか) → コード (実装)。図が drift しないよう注意

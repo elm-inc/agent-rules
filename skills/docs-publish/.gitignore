@@ -1,0 +1,5 @@
+# mermaid を含む依存は重いのでコミットしない。ensure-deps.sh が npm ci で再現する (ADR-0005 方式)。
+node_modules/
+# 変換中間物 (通常は tmpdir に出るが保険)
+*.tmp.html
+.md2pdf.tmp.html
