@@ -179,5 +179,5 @@ AI 軸から**意図的に分離**。ADR-0003 (人間共有 = Notion) を「audi
 | P1 (今回) | §4 記述規約 + ADR future-guard 欄 + テンプレ更新 + ADR-0011/0012 |
 | P2 | `gen-docs-index` (llms.txt 自動生成) + pre-commit 検証 |
 | P3 | `docs-graph` (関係図再生成 + drift lint) を CI に |
-| P4 | 人間向け publish パイプライン (Marp/pandoc) を skill 化 |
+| P4 (一部済) | 人間向け publish パイプラインを skill 化 → **`/docs-publish` (Markdown → PDF/Word、mermaid 保持、frontmatter/publish:exclude 除去、audience ガード) 実装済み**。Marp(スライド) は未 |
 | 後続 | 必要になれば GraphRAG / MCP doc サーバー (Markdown 不変で接続) |

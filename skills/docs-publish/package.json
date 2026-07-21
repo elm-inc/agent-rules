@@ -1,0 +1,12 @@
+{
+  "name": "agent-rules-docs-publish",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Markdown (mermaid + テーブル) → PDF / Word 変換。図を正しく描画したまま publish する汎用スキル。",
+  "dependencies": {
+    "markdown-it": "^14.1.0",
+    "mermaid": "^11.6.0",
+    "puppeteer-core": "^24.10.0"
+  }
+}
