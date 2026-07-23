@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Fable 5 の当月利用実費を Claude Code の transcript から集計する。
-# 従量課金移行 (included 無償枠は 2026-07-19 まで / 実費 credits は 2026-07-20 開始) に伴い
-# 「Fable = 実費」を可視化し過剰利用を抑えるための計器。
-# 根拠: docs/adr/0010-fable-metered-billing-controls.md
+# Fable 5 の当月利用の推定コスト上限を Claude Code の transcript から集計する。
+# 課金モデル (2026-07-23 訂正): Max プランは週次上限の 50% まで included (恒久)、超過分のみ
+# 実費 (usage credits、2026-07-20 開始)。included 消費はローカルから観測できないため、
+# 本スクリプトは全トークンを課金対象とみなす【上限見積り】を出す (実費 ≤ 表示値。正は Console)。
+# 根拠: docs/adr/0010-fable-metered-billing-controls.md (2026-07-23 改訂)
 #
 # 使い方:
 #   ./scripts/fable-usage.sh                 # 当月のレポート (トークン内訳 + $ + 予算ステータス)
@@ -10,7 +11,7 @@
 #   ./scripts/fable-usage.sh --statusline    # statusline 用: "<cost_int> <budget_int>" をキャッシュから即返す
 #   ./scripts/fable-usage.sh --refresh       # キャッシュを再計算 (統計的に重い。通常は statusline が裏で起動)
 #
-# 予算しきい値: FABLE_BUDGET_USD (既定 100 / 開発者1人あたり月)。ソフトゲート — ブロックはしない。
+# 予算しきい値: FABLE_BUDGET_USD (既定 100 / 開発者1人あたり月)。included 超過分への予算。ソフトゲート — ブロックはしない。
 # transcript 位置: CLAUDE_PROJECTS_DIR (既定 ~/.claude/projects)。サブエージェントログも再帰的に含む。
 
 set -uo pipefail
@@ -22,8 +23,9 @@ CACHE="$CACHE_DIR/fable-mtd.json"
 LOCK="/tmp/agent-rules-fable-usage.lock"   # /tmp 固定 (TMPDIR 変動で単一化が破れる)
 STALE_SEC=600                              # statusline がこの秒数を超えたキャッシュを裏で更新
 
-# Fable 従量課金の単価 (per MTok)。cache は Anthropic 標準の write=1.25x / read=0.1x を input 単価に乗じた推定。
-PRICE_INPUT=10 ; PRICE_CACHE_WRITE=12.5 ; PRICE_CACHE_READ=1 ; PRICE_OUTPUT=50
+# Fable 従量課金の単価 (per MTok、公式確定値 2026-07-23)。cache write は 5m=$12.5 / 1h=$20。
+# transcript の usage.cache_creation に 5m/1h 内訳があれば分離課金、無ければ全量 5m 単価 ($12.5 = 下限) で計上。
+PRICE_INPUT=10 ; PRICE_CACHE_WRITE_5M=12.5 ; PRICE_CACHE_WRITE_1H=20 ; PRICE_CACHE_READ=1 ; PRICE_OUTPUT=50
 
 MODE="report"
 MONTH="$(date +%Y-%m)"
@@ -37,23 +39,24 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-# transcript を走査し当月 Fable のトークンを合算 → "input cache_write cache_read output" を返す。
-# fail-safe: 依存欠如・データ無しは "0 0 0 0" (安全側 = 0 実費)。
+# transcript を走査し当月 Fable のトークンを合算 → "input cache_write_5m cache_write_1h cache_read output" を返す。
+# fail-safe: 依存欠如・データ無しは "0 0 0 0 0" (安全側 = 0 実費)。
 aggregate_tokens() {
   local month="$1" first
   first="${month}-01"
-  command -v jq >/dev/null 2>&1 || { echo "0 0 0 0"; return 0; }
-  [ -d "$PROJECTS" ] || { echo "0 0 0 0"; return 0; }
+  command -v jq >/dev/null 2>&1 || { echo "0 0 0 0 0"; return 0; }
+  [ -d "$PROJECTS" ] || { echo "0 0 0 0 0"; return 0; }
 
   # (1) 当月に追記のあった jsonl だけに絞る (性能。当月 Fable 利用があるセッションは当月 mtime を持つ)
   local -a files ffiles
   mapfile -t files < <(find "$PROJECTS" -type f -name '*.jsonl' -newermt "$first 00:00:00" 2>/dev/null)
-  [ "${#files[@]}" -eq 0 ] && { echo "0 0 0 0"; return 0; }
+  [ "${#files[@]}" -eq 0 ] && { echo "0 0 0 0 0"; return 0; }
   # (2) fable モデル ID を含むファイルだけ残す (Opus 専用の巨大ログを jq に流さない)
   mapfile -t ffiles < <(grep -lF "claude-fable" "${files[@]}" 2>/dev/null)
-  [ "${#ffiles[@]}" -eq 0 ] && { echo "0 0 0 0"; return 0; }
+  [ "${#ffiles[@]}" -eq 0 ] && { echo "0 0 0 0 0"; return 0; }
 
-  # (3) assistant かつ model=fable かつ timestamp が当月のメッセージの usage を合算
+  # (3) assistant かつ model=fable かつ timestamp が当月のメッセージの usage を合算。
+  #     cache write は usage.cache_creation の 1h 内訳を分離 (無ければ全量 5m 扱い = 下限)。
   cat "${ffiles[@]}" 2>/dev/null \
     | jq -rc --arg m "$month" '
         select(.type == "assistant")
@@ -61,18 +64,22 @@ aggregate_tokens() {
         | select((.timestamp // "")[0:7] == $m)
         | [ (.message.usage.input_tokens // 0),
             (.message.usage.cache_creation_input_tokens // 0),
+            ((.message.usage.cache_creation // {}) | .ephemeral_1h_input_tokens // 0),
             (.message.usage.cache_read_input_tokens // 0),
             (.message.usage.output_tokens // 0) ] | @tsv' 2>/dev/null \
-    | awk 'BEGIN{i=cw=cr=o=0}
-           {i+=$1; cw+=$2; cr+=$3; o+=$4}
-           END{ printf "%d %d %d %d\n", i, cw, cr, o }'
+    | awk 'BEGIN{i=c5=c1=cr=o=0}
+           { i+=$1; cr+=$4; o+=$5
+             if ($3 > $2) { c5+=$2 }            # 内訳異常時は全量 5m (下限) 扱い
+             else         { c5+=$2-$3; c1+=$3 } }
+           END{ printf "%d %d %d %d %d\n", i, c5, c1, cr, o }'
 }
 
-# トークン4値 → $ (小数2桁)。awk 比較は使わないので括弧不要だが float 演算のみ。
+# トークン5値 → $ (小数2桁)。awk 比較は使わないので括弧不要だが float 演算のみ。
 cost_of() {
-  awk -v i="$1" -v cw="$2" -v cr="$3" -v o="$4" \
-      -v pi="$PRICE_INPUT" -v pcw="$PRICE_CACHE_WRITE" -v pcr="$PRICE_CACHE_READ" -v po="$PRICE_OUTPUT" \
-      'BEGIN{ printf "%.2f", (i*pi + cw*pcw + cr*pcr + o*po)/1000000 }'
+  awk -v i="$1" -v c5="$2" -v c1="$3" -v cr="$4" -v o="$5" \
+      -v pi="$PRICE_INPUT" -v p5="$PRICE_CACHE_WRITE_5M" -v p1="$PRICE_CACHE_WRITE_1H" \
+      -v pcr="$PRICE_CACHE_READ" -v po="$PRICE_OUTPUT" \
+      'BEGIN{ printf "%.2f", (i*pi + c5*p5 + c1*p1 + cr*pcr + o*po)/1000000 }'
 }
 
 write_cache() {
@@ -122,7 +129,7 @@ case "$MODE" in
 
   report|*)
     toks="$(aggregate_tokens "$MONTH")"
-    read -r i cw cr o <<<"$toks"
+    read -r i c5 c1 cr o <<<"$toks"
     # shellcheck disable=SC2086
     cost="$(cost_of $toks)"
     # statusline 用キャッシュは当月のみ更新 (過去月レポートで当月キャッシュを汚さない)
@@ -130,20 +137,21 @@ case "$MODE" in
     pct="$(awk -v c="$cost" -v b="$BUDGET" 'BEGIN{ if ((b+0)>0) printf "%.0f", c/b*100; else printf "0" }')"
     over="$(awk -v c="$cost" -v b="$BUDGET" 'BEGIN{ print ((c+0)>(b+0) ? 1 : 0) }')"
 
-    echo "=== Fable 5 当月利用実費: $MONTH (開発者1人・このマシン) ==="
+    echo "=== Fable 5 当月推定コスト上限: $MONTH (開発者1人・このマシン) ==="
     echo ""
     printf "  input        : %'d tok\n" "$i" 2>/dev/null || printf "  input        : %d tok\n" "$i"
-    printf "  cache write  : %'d tok\n" "$cw" 2>/dev/null || printf "  cache write  : %d tok\n" "$cw"
+    printf "  cache w (5m) : %'d tok\n" "$c5" 2>/dev/null || printf "  cache w (5m) : %d tok\n" "$c5"
+    printf "  cache w (1h) : %'d tok\n" "$c1" 2>/dev/null || printf "  cache w (1h) : %d tok\n" "$c1"
     printf "  cache read   : %'d tok\n" "$cr" 2>/dev/null || printf "  cache read   : %d tok\n" "$cr"
     printf "  output       : %'d tok\n" "$o" 2>/dev/null || printf "  output       : %d tok\n" "$o"
     echo "  --------------------------------"
-    echo "  推定実費     : \$$cost  (予算 \$$BUDGET の ${pct}%)"
+    echo "  推定実費上限 : \$$cost  (予算 \$$BUDGET [included 超過分への予算] の ${pct}%)"
     if [ "$over" = "1" ]; then
       echo "  ⚠️  予算超過。以降の Fable 委譲は本当に必要か都度確認する (人手ゲート。ブロックはしない)。"
     fi
     echo ""
     echo "  ※ ローカル transcript ベースの推定。正確な請求は Console: https://console.anthropic.com/settings/usage"
-    echo "  ※ included 無償枠は 2026-07-19 まで。7/20 より前の利用は credit 課金外なので、当月推定は上限見積り (実費はこれ以下)。"
+    echo "  ※ Max プランは週次上限の 50% まで included (恒久)。included 消費はローカルから観測できないため、本推定は全量課金換算の上限見積り (実費 ≤ 表示値)。"
     echo "  ※ 結果は docs/design/ai-workflow.md §8 の Fable 行に転記する。"
     ;;
 esac
