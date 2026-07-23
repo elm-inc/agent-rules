@@ -43,12 +43,13 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
   (必要時) /test-generate            ← テスト追加
   /codex-review                      ← セカンドオピニオン
   (必要時) /gemini-review            ← リポ横断
+  (高リスク変更のみ) /fable-review   ← 最終 (最後の砦)
 
 [実行検証]
   /verify, E2E テスト
 ```
 
-軽微な変更では `/local-review` + pre-commit のみで十分。`/gemini-review` は 10+ ファイル変更や ADR drift 疑い時のみ。
+軽微な変更では `/local-review` + pre-commit のみで十分。`/gemini-review` は 10+ ファイル変更や ADR drift 疑い時のみ。`/fable-review` はセキュリティ・課金・データ破壊・公開 API・並行処理などの高リスク変更のみ (条件表: `skills/fable-review/SKILL.md`)。
 
 ## 4. ベンチマーク実績 (Phase 4 試運転)
 
