@@ -2,274 +2,109 @@
 
 **重要: 最初に `~/RULES.md` を読み込み、記載されたルールをすべて遵守すること。**
 
-このファイルは「いつ何のスキルを使うか」のルーティング索引。各仕組みの手順・内部詳細は各 `SKILL.md` / `docs/` にあり、リンクで辿る。
+このファイルは「いつ何のスキルを使うか」のルーティング索引 + プロジェクト横断の判断基準・安全原則。各仕組みの手順・内部詳細は各 `SKILL.md` / `docs/` にあり、リンクで辿る (詳細は重複させない)。3 層ナレッジ構成と昇格ルールの根拠: [`docs/adr/0013`](docs/adr/0013-three-layer-knowledge-architecture.md) / [`docs/design/claude-md-restructure.md`](docs/design/claude-md-restructure.md)。
 
 ## AI 開発ワークフロー (多層・多モデル)
 
-実装は Claude Opus 4.8、レビュー・検証・テスト生成は **複数 LLM の役割分担 + 機械検証** で多層化する。Anthropic/OpenAI 系に偏らせず Gemini・DeepSeek・ローカル LLM を混ぜる (groupthink 回避)。最上位の Claude Fable 5 は高難度タスク限定でサブエージェント委譲する。
-設計判断の根拠: [`docs/adr/0001`](docs/adr/0001-multi-llm-development-workflow.md), [`docs/adr/0002`](docs/adr/0002-multi-model-test-generation.md) / 全体像: [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md)
+実装は **Claude Opus 4.8** (司令塔・セッションモデル)、レビュー・検証・テスト生成は複数 LLM の役割分担 + 機械検証で多層化 (Anthropic/OpenAI 系に偏らせず Gemini・DeepSeek・ローカル LLM を混ぜ groupthink 回避)。Codex/DeepSeek/Gemini/Qwen はスキル経由で呼ぶ「ツール」で司令塔にはならない。
+役割分担・オーケストレーション・コスト見通しの全体像: [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) / 根拠: [`docs/adr/0001`](docs/adr/0001-multi-llm-development-workflow.md), [`docs/adr/0006`](docs/adr/0006-orchestration-methods.md)。
 
-### 役割分担とスキル
-
-| ロール | モデル / ツール | スキル |
-|---|---|---|
-| 実装 (主) | Claude Opus 4.8 | (Claude Code 本体) |
-| 高難度実装・設計 (委譲) | Claude Fable 5 (subagent) | `/fable-task` |
-| 最終レビュー (最高精度・限定) | Claude Fable 5 (subagent) | `/fable-review` |
-| 0 次レビュー (高速・無料) | ローカル Qwen2.5-Coder-32B | `/local-review` |
-| セカンドオピニオン (異種ベンダー) | Codex (GPT-5) | `/codex-review`, `/codex-task`, `/codex-audit` |
-| 設計レッドチーム (思考連鎖) | DeepSeek-R1 | `/deepseek-redteam` |
-| リポ横断 (1M context) | Gemini 2.5 Pro | `/gemini-review` |
-| テスト観点抽出・実装 | DeepSeek-R1 + Qwen | `/test-generate` (`--brainstorm` / `--implement`) |
-| テストデータ生成 | Qwen (バッチ) | `/test-data` |
-| テスト健全性検証 | mutation testing | `/mutation-check` |
-| 機械検証 | pre-commit (ruff/mypy/semgrep) | (各リポで設定) |
+| ロール | スキル |
+|---|---|
+| 高難度実装・設計 / 最終レビュー (Fable 5 subagent) | `/fable-task` / `/fable-review` |
+| 0 次レビュー (Qwen) / セカンドオピニオン (Codex) | `/local-review` / `/codex-review`・`/codex-task`・`/codex-audit` |
+| 設計レッドチーム (DeepSeek) / リポ横断 (Gemini) | `/deepseek-redteam` / `/gemini-review` |
+| テスト観点・実装 / データ / 健全性 | `/test-generate` / `/test-data` / `/mutation-check` |
+| 探索・調査の床 (Haiku subagent) | `explorer` / `researcher` (`~/.claude/agents/`) |
 
 ### モデル使い分け (Opus 4.8 / Fable 5)
 
-> 💰 **【従量課金 2026-07-20〜 (2026-07-23 訂正)】** Fable 5 は Max プランでは**週次上限の 50% まで included (恒久)、超過分のみ実費 (ドル) 課金** ($10/$50 per MTok = Opus の 2 倍)。statusline / `fable-usage.sh` の $ は included 未考慮の**上限見積り** (実費の正は Console)。included 枠があっても「余っているから念のため Fable」は不成立 (Opus 等と週次上限を食い合う) — **価値 (手戻り・正しさ・品質の下流波及) がコストを上回る局面に厳選**し、当月実費を計器で監視する (下記「コスト規律・モニタリング」)。根拠: [`docs/adr/0010`](docs/adr/0010-fable-metered-billing-controls.md) (07-23 改訂)
+常用は **Opus 4.8**。**Fable 5** は「**手戻り・正しさ・品質が下流に大きく波及するか**」を物差しに、価値が高い局面で subagent 委譲する (委譲前に一言宣言し「なぜ Opus では不足か」を 1 行添える)。局所的・機械的・低リスクなタスクは Opus のまま。使いどころの条件表は各 SKILL.md (`/fable-task` = 設計/難実装/調査/品質引き上げ、`/fable-review` = セキュリティ・課金・公開 API・並行処理などの高リスク変更に限定)。セッション全体を Fable にするのは単発・完全自律の超高難度ミッションのみ (`/model fable`)。
 
-常用 (セッションモデル) は **Opus 4.8**。Fable 5 は $10/$50 per MTok で Opus の 2 倍 (included 超過分は実費課金) だが、**価値が高い局面では積極的に活用する**。判断の物差しは「**手戻り・正しさ・品質が下流に大きく波及するか**」。以下を検知したら **Claude が自分で判断して** Fable 5 サブエージェントに委譲する (委譲前に一言宣言し、「なぜ Opus では不足か」を 1 行添える):
+> 💰 **安全原則 (Fable コスト規律・従量課金 2026-07-20〜)**: Fable 5 は Max では**週次上限の 50% まで included (恒久)、超過分のみ実費** ($10/$50 per MTok = Opus の 2 倍)。included 枠があっても「余っているから念のため Fable」は不成立 (Opus 等と週次上限を食い合う)。**1 タスク 1 委譲 (往復＝追加実費)・委譲前宣言・statusline 監視**を徹底。当月 $ は `scripts/fable-usage.sh` が集計し statusline に常時表示 (included 未考慮の上限見積り・実費の正は Console。予算 $100/月 = 超過分への予算)。超過後も止めないが起動前に要否を都度確認 (人手ゲート)。根拠: [`docs/adr/0010`](docs/adr/0010-fable-metered-billing-controls.md) (07-23 改訂)
 
-**`/fable-task` (設計・実装・調査)**
+### 運用規律・実行方式
 
-| カテゴリ | 該当条件 |
-|---|---|
-| 設計・アーキテクチャ | 判断が拮抗し誤ると手戻りが大きい (ADR 比較検討・技術選定) / 新規プロジェクト・サブシステムの初期設計・足場づくり / 設計ドキュメント (docs/design・ADR) の起草本体 |
-| 難度の高い実装 | 10+ ファイル横断 or 構造的に難しいリファクタ・新機能 / 正しさがクリティカル (並行処理・状態機械・課金/金額計算・データ整合性・認証) |
-| 調査・最適化 | 原因不明バグの調査 (一度失敗した or 重大なもの) / パフォーマンスのボトルネック分析と最適化 / 大規模・不慣れなコードベースの横断的な理解が要るタスク |
-| 品質の引き上げ | Opus で一度試して質・正しさに不満が残ったとき (Fable で作り直す) |
-
-**`/fable-review` (最終レビュー)**
-
-| 該当条件 |
-|---|
-| セキュリティ・認証・課金・データ破壊リスクに関わる変更 |
-| 公開 API・後方互換性・DB スキーマ/マイグレーションに関わる変更 |
-| 並行処理・状態管理・トランザクション境界を含む差分 |
-| 大規模変更のマージ前最終確認、レビュー意見が割れた差分 |
-| 外部に出る成果物 (顧客提出物・本番デプロイ前) |
-
-**迷ったら**: 影響範囲が広い / 正しさが重要 / 品質が下流に波及するタスクは Fable に回してよい。逆に**局所的・機械的・低リスク**なタスク (定型修正、リネーム、軽微なバグ、調査の一次あたり) は Opus のまま。委譲はサブエージェント単位で行い (セッション全体を Fable にしない)、完全な仕様を最初に一括で渡す。セッション全体を切り替えたい場合のみユーザーが `/model fable` を実行する。
-
-**コスト規律・モニタリング (従量課金)**: Fable の当月実費は `scripts/fable-usage.sh` が transcript から自動集計し、**statusline に当月累計 $ を常時表示**する (予算 $100/月 = **included 超過分への予算**・開発者1人。`FABLE_BUDGET_USD` で調整。表示値は included 未考慮の上限見積り)。予算超過後も委譲・レビューを止めはしない (高性能は活かす) が、**起動前に「本当に Fable が要るか」を都度確認する人手ゲート**に切り替える。重い委譲の後や週次で `scripts/fable-usage.sh` / `scripts/track-cost.sh` を確認し、結果を [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) §8 に転記する。1 タスク 1 委譲 (往復＝追加実費) を徹底する。
-
-### 標準オーケストレーション (大規模開発)
-
-複数モデルを組み合わせて大規模タスクを進める時の基本形。**司令塔は必ずメインセッションの Claude** (通常 Opus 4.8)。Codex / DeepSeek / Gemini / Qwen はスキル経由で呼ぶ「ツール」であり、司令塔にはならない。
-
-| モデル | 役割 |
-|---|---|
-| **Opus 4.8 = 司令塔** | 計画・分解・分配・統合・実装の主。トークン最多のセッションを 1x コストに保つ |
-| **Fable 5 = 両端の専門脳** | 全体設計/分解の起草 (要所) と高リスク変更の最終レビュー (`/fable-task`・`/fable-review` subagent)。included (週次上限の 50%) 超過分は実費のため厳選 + 計器で監視 (上記コスト規律) |
-| **Codex = 異種ベンダーの横やり + 独立系統の並列実装** | 盲点ヘッジ + 別系統を丸ごと委譲して真の並列化 (`/codex-task`・`/codex-review`) |
-| **DeepSeek-R1 / Gemini = レッドチーム / リポ横断整合** | 設計の破綻炙り (`/deepseek-redteam`) と 1M context での全体整合 (`/gemini-review`) |
-| **Qwen + pre-commit = 床** | 0 次レビュー (`/local-review`) と機械検証の最前段フィルタ |
-| **explorer / researcher = 探索・調査の床 (Haiku)** | コード探索・外部調査を安価なサブエージェントに委譲し本体の文脈とコストを節約 (`~/.claude/agents/`) |
-
-```
-[設計] 受け入れ基準付きで仕様起草 (Fable, docs/design) → /deepseek-redteam で redteam
-[実装] Opus 司令塔、worktree で並列分解:
-        探索・調査→explorer/researcher subagent (Haiku) / 難所→Fable subagent (/fable-task)
-        / 独立系統→Codex 委譲 (/codex-task) / 大半→Opus 自身
-[レビュー] /local-review (0次) → pre-commit (機械) → /codex-review (異種)
-          → (10+ファイル/drift 疑い) /gemini-review で受け入れ基準・ADR 適合を確認
-          → (高リスクのみ) /fable-review (最終)
-          ※ 各層の所見は 集約→重複排除→重要度ランク付け してから対処 (敵対的検証)
-```
-
-**運用規律 (Max プラン)**: サブエージェント多用はトークン約 7 倍。**並列分解は最大 5、>10 は無益**。探索・調査は Haiku サブエージェントに、Fable は数少ない難所のみ。
-**運用方式 (実行時)**: 巨大タスクで網羅性が要る時は、決定論的な並列ファンアウト (Workflow: finders→敵対的検証→統合 / loop-until-dry) を明示的に使う。協調が要る独立セッション群は Background Agents / Agent Teams を検討 (重・高コストなので worktree 並列の次段)。
-
-**例外**: 単発・完全自律の超高難度ミッション (一晩でサブシステム移行など) は、Fable を司令塔にして `/model fable` で走らせる方が良い (完全な仕様を一括投入し long-horizon 自律を活かす。コストは割り切る)。対話的・多段の大規模開発は上記の Opus 司令塔型が勝る。
-
-設計判断の根拠: [`docs/adr/0006`](docs/adr/0006-orchestration-methods.md)
+- **並列分解は最大 5、>10 は無益** (サブエージェント多用はトークン約 7 倍)。探索・調査は Haiku subagent に、Fable は数少ない難所のみ (**安全原則: サブエージェント規律**)
+- 巨大タスクで網羅性が要る時は決定論的な並列ファンアウト (Workflow: finders→敵対的検証→統合 / loop-until-dry) を明示的に使う。協調が要る独立セッション群は Background Agents / Agent Teams を検討 (worktree 並列の次段)
+- 各レビュー層の所見は **集約→重複排除→重要度ランク付け** してから対処 (敵対的検証)
 
 ### コミット時のフロー (推奨)
 
 ```
-[設計] docs/design/foo.md 起草 → /deepseek-redteam で盲点炙り出し → (任意) /codex-audit
+[設計] docs/design/foo.md 起草 (受け入れ基準 + 検証手段付き) → /deepseek-redteam → (任意) /codex-audit
 [実装] Opus 4.8 (高難度は /fable-task で Fable 5 委譲)
 [コミット前] /local-review → pre-commit → (必要時) /test-generate → /codex-review
-             → (10+ファイル/ADR drift 疑い時) /gemini-review → (高リスク変更のみ) /fable-review
-[実行検証] /verify, E2E
+             → (10+ファイル/ADR drift 疑い) /gemini-review → (高リスク変更のみ) /fable-review
+[実行検証] /verify, /run, E2E (UI はスクショ)
 ```
-
 軽微な変更では `/local-review` + pre-commit のみで十分。
 
-> **ローカル LLM (vLLM) は普段停止しているのが正常** (オンデマンド起動: [`docs/adr/0005`](docs/adr/0005-on-demand-local-llm.md))。`/local-review`・`/test-generate`・`/test-data` は実行時に `ensure-vllm.sh` で自動起動する (初回ロード 1-2 分、アイドル 15 分で自動停止)。**「vLLM が停止しているのでローカルレビューを中止」は誤り** — 停止は既定状態であって利用不可ではない。自前で `:8000` を叩いて落ちていても中止せず、スキル経由で起動して続行する。本当に起動できないとき (GPU 専有等) のみ `/codex-review` に切り替える。
-
-### セットアップ・トラブル対処
-
-- ローカル LLM (vLLM) 起動: [`docs/setup/local-llm.md`](docs/setup/local-llm.md)。API キーは `scripts/env-snippet.sh` (`~/.*_token` 方式)
-- よくある不具合 (vLLM OOM / Gemini 応答空 / HF DL ストール / Distill 評価) の対処は [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) と各 `SKILL.md` に集約
+> **安全原則 (vLLM は停止が既定)**: ローカル LLM (vLLM) は普段停止しているのが正常 (オンデマンド起動)。`/local-review`・`/test-generate`・`/test-data` は `ensure-vllm.sh` で自動起動する (初回 1-2 分・アイドル 15 分で自動停止)。**「vLLM が停止しているのでローカルレビューを中止」は誤り** — 停止は既定状態であって利用不可ではない。自前で `:8000` を叩いて落ちていても中止せずスキル経由で起動して続行。本当に起動不可 (GPU 専有等) のときのみ `/codex-review` に切替。根拠: [`docs/adr/0005`](docs/adr/0005-on-demand-local-llm.md) / セットアップ: [`docs/setup/local-llm.md`](docs/setup/local-llm.md)
 
 ### Claude Code 開発プラクティス (公式準拠)
 
-multi-LLM オーケストレーションは独自拡張だが、Claude 単体の基本は公式に従う:
-
-- **開発ループ**: Explore → Plan → Review → Execute。高リスク・大規模変更は **plan モード**で計画をレビューしてから実行 (auto モードは安全分類器付きで既定採用済み)
-- **文脈管理**: CLAUDE.md は <200 行の索引に保つ。ファイル種別ごとの規約は `.claude/rules/*.md` (`paths:` でスコープ、該当ファイル読込時のみロード) に逃がす。本リポも採用 (`.claude/rules/`)、雛形は [`templates/claude-rules/`](templates/claude-rules/README.md)
-- **検証**: コード変更は「実行して確かめる」(UI はスクショ)。`/verify`・`/run` を使う
+- **開発ループ**: Explore → Plan → Review → Execute。高リスク・大規模変更は **plan モード**で計画をレビューしてから実行
+- **文脈管理**: CLAUDE.md は <200 行の索引に保つ。ファイル種別ごとの規約は `.claude/rules/*.md` (`paths:` スコープ・該当ファイル読込時のみロード) に逃がす。雛形: [`templates/claude-rules/`](templates/claude-rules/README.md)
 - 公式ガイド: [common-workflows](https://code.claude.com/docs/en/common-workflows) / [permission-modes](https://code.claude.com/docs/en/permission-modes) / [memory](https://code.claude.com/docs/en/memory)
+
+## ナレッジ昇格ルール (プロジェクト横断共通化)
+
+各プロジェクトでゼロベース設計を繰り返さないための仕組み ([`ADR-0013`](docs/adr/0013-three-layer-knowledge-architecture.md))。3 層構成: **L1 判断基準** (本ファイル・RULES.md — symlink で全プロジェクト常時適用) / **L2 再利用資産** (`templates/`・`.claude/rules/`・skills — `/project-init` で展開) / **L3 プロジェクト固有** (各リポ CLAUDE.md・memory)。
+
+**2 回目ルール (台帳照合型)**: 横断再利用しそうな設計判断・実装パターン・調査に触れたら **1 回目に中央台帳 [`docs/notes/promotion-candidates.md`](docs/notes/promotion-candidates.md) へ記録** (uncommitted 追記でよい・コミットは昇格 PR 時)。記録時に既存候補と照合し、**一致 (=2 回目) したら agent-rules へ昇格**する。project memory はプロジェクト毎に隔離されるため、この台帳が唯一の横断検知点。
+
+**昇格先**: いつ何を使うかの判断 → 本ファイル / ツール横断 (Codex too) の安全原則 → RULES.md / ファイル種別・stack 規約 → `.claude/rules/*.md` / 手順 → skill / 初期構造 → template / なぜ → ADR。**逆方向**: 四半期見直しで参照されない行を降格・削除 (再肥大化防止)。
 
 ## 並列開発 (git worktree)
 
-タスクごとに worktree を分離し、安全に並列開発する。
+タスクごとに worktree を分離。**メインワークツリーでは直接コード変更しない** (常に main・クリーンを保つ)。
 
 | スキル | 用途 |
 |--------|------|
 | `/worktree-start <名> <説明>` | worktree 作成 + タスク登録 (`--linear <ID>` で Issue 連携 / `--tab` で別 zellij タブに引き継ぎ起動) |
-| `/worktree-list` | 全タスクの状況・衝突リスク確認 |
-| `/worktree-finish [名]` | マージ + worktree 削除 (Linear 自動 Done) |
+| `/worktree-list` / `/worktree-finish [名]` | 状況・衝突リスク確認 / マージ + 削除 (Linear 自動 Done) |
 
-- **デフォルトは単一セッション**: `/worktree-start` → 同一セッション内で `cd <worktree>` して作業 → メインに戻り `/worktree-finish`。メインワークツリーでは直接コード変更しない原則を維持
-- 真に並列化する独立タスクのみ別セッション: **`/worktree-start <名> <説明> --tab`** で別 zellij タブに worktree を開き、引き継ぎドキュメント (`<共有.git>/worktree-tasks/<ID>-<名>.md` に ID 付き集約・永続) を初期プロンプトに渡して `claude` 自動起動。子は新規セッションで親の会話・プランを継がないため引き継ぎ doc が要 (手動なら `cd <worktree> && claude --remote-control "<名>"`、Remote Control 不要なら `--no-remote`)
-- タスクレジストリは `<repo>/.git/parallel-tasks.json` に記録、全 worktree から共有参照
-- **多数セッションを並行する時** (worktree 並列 + プロジェクト横断) は `claude agents` (Agent View) をハブに、`/worktree-list`・`/status` と併用し「入力待ちだけ対応」。運用ランブック: [`docs/setup/session-management.md`](docs/setup/session-management.md)
+- 既定は単一セッション (`/worktree-start` → `cd <worktree>` → 作業 → メインに戻り `/worktree-finish`)。真に並列化する独立タスクのみ `--tab` で別セッション (子は親の会話を継がないため引き継ぎ doc `<共有.git>/worktree-tasks/<ID>-<名>.md` が要)
+- レジストリ `<repo>/.git/parallel-tasks.json` を全 worktree から共有参照。多数セッション並行時は `claude agents` (Agent View) をハブに。ランブック: [`docs/setup/session-management.md`](docs/setup/session-management.md)
 
 ## Linear イシュー管理
 
-進捗・期日・ステークホルダー可視化は **Linear** に集約。設計・決定は `docs/`、コードレビューは GitHub PR。重複を排除する。
-セットアップ (MCP 登録): [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)
+進捗・期日・ステークホルダー可視化は **Linear** に集約。設計・決定は `docs/`、コードレビューは GitHub PR (重複排除)。セットアップ: [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)。
 
-### 役割分担 (何をどこに置くか)
-
-| 関心事 | 担当 |
-|---|---|
-| 期日・進捗・状態・優先度・ロードマップ | **Linear** |
-| Why (なぜ決めたか) | `docs/adr/` |
-| How (動作・状態機械) | `docs/architecture/` |
-| What (詳細仕様・実装計画) | `docs/design/` |
-| コード・差分・レビュー | GitHub PR |
-| AI セッション文脈 | memory |
-
-**重複禁止**: Linear Issue description は「短い要約 + docs/design/foo.md へのリンク」のみ。本文は docs に。**Linear の Docs/Wiki 機能は使わない** (AI 摩擦・vendor lock-in)。
-
-### スキルと構造
-
-| スキル | 用途 |
-|--------|------|
-| `/linear-status` | Project / Issue / cycle の現状表示 |
-| `/linear-issue` | Issue の作成・表示・状態変更 |
-| `/linear-plan` | Project + サブ Issue を一括作成 (大規模計画用) |
-
-- **Project** = 多段階タスク / **Issue** = 1 worktree = 1 PR / **サブ Issue** = Phase
-- 相互リンク: branch `worktree/<linear-id>-<task>` (PR 自動紐付け) / commit `feat: ... (ELM-123)` / docs 冒頭 `- Linear: ELM-123`
-- 運用フロー: `docs/design/foo.md` → `/linear-plan` → `/worktree-start <名> --linear <ID>` (In Progress) → 実装 → PR → `/worktree-finish` (Done)
+- 役割分担: 期日/進捗/状態/優先度 → Linear / Why → `docs/adr/` / How → `docs/architecture/` / What → `docs/design/` / コード → GitHub PR / AI 文脈 → memory
+- **重複禁止**: Issue description は「短い要約 + docs リンク」のみ。**Linear の Docs/Wiki 機能は使わない** (vendor lock-in)
+- **Project** = 多段階 / **Issue** = 1 worktree = 1 PR / **サブ Issue** = Phase。相互リンク: branch `worktree/<linear-id>-<task>` / commit `feat: ... (ELM-123)` / docs 冒頭 `- Linear: ELM-123`
+- スキル: `/linear-status` (現状表示) / `/linear-issue` (作成・状態変更) / `/linear-plan` (Project + サブ Issue 一括作成)
 
 ## Notion 連携 (人間共有用)
 
-人間相手の共有ドキュメント (会議資料・議事録・顧客提出物・ステータス共有・オンボーディング) に Notion を併用する。設計図は in-repo (ADR-0001) のまま。
-根拠: [`docs/adr/0003`](docs/adr/0003-notion-for-human-shared-docs.md) / セットアップ・MCP tool・書き込み時のクセ: [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)
+人間相手の共有ドキュメント (会議資料・議事録・顧客提出物・オンボーディング) に Notion を併用。設計図は in-repo のまま。根拠: [`docs/adr/0003`](docs/adr/0003-notion-for-human-shared-docs.md) / MCP tool・書き込みのクセ: [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)。
 
-**重複禁止**: 同じ内容を docs/ と Notion の両方に置かない。設計/ADR は docs/ が primary (Notion からは GitHub blob URL でリンク)、議事録は Notion が primary (決定事項を docs/adr/ に昇格時は「(議事録: Notion URL)」と注記)。
+**重複禁止**: 同じ内容を docs/ と Notion の両方に置かない。設計/ADR は docs/ が primary (Notion からは GitHub blob URL でリンク)、議事録は Notion が primary (決定を docs/adr/ に昇格時は「(議事録: Notion URL)」注記)。
 
 ## ドキュメント・図式
 
-設計と実装の可視化は **in-repo Markdown + Mermaid** が基盤 (Mermaid で不足なら D2)。Notion / Confluence / Linear Docs / バイナリ画像は設計図に使わない (設計図を in-repo に置く方針は ADR-0003 で確立)。
-構造の雛形: `agent-rules/templates/docs/`
+設計と実装の可視化は **in-repo Markdown + Mermaid** が基盤 (不足なら D2)。Notion / Confluence / Linear Docs / バイナリ画像は設計図に使わない。構造の雛形: `templates/docs/` (メタと本体の分離は [`ADR-0009`](docs/adr/0009-separate-templates-from-docs.md) / AI-first 構成は [`ADR-0011`](docs/adr/0011-ai-first-docs-architecture.md))。
 
-| ディレクトリ | 内容 |
-|--------|------|
-| `docs/adr/` | Architecture Decision Records (なぜ・何を決めたか) |
-| `docs/architecture/` | C4 model (L1 Context → L4 Code) + 状態/シーケンス/依存図 |
-| `docs/design/` | 実装計画・仕様 |
-| `docs/_templates/` | **メタ** (記入用ひな形)。ドキュメント本体ではない |
+- ディレクトリ: `docs/adr/` (なぜ) / `docs/architecture/` (C4 + 状態/シーケンス図) / `docs/design/` (実装計画・仕様) / `docs/_templates/` (記入用ひな形)
+- スキル: `/docs-init` (標準構造展開) / `/docs-visualize` (C4 + 状態機械で可視化) / `/adr-new <題>` (自動採番) / `/docs-publish pdf|docx <md>` (mermaid 保持のまま人間向け配布・[`ADR-0012`](docs/adr/0012-human-facing-docs-publish-model.md))
+- **安全原則 (ADR 運用)**: ファイル名 `NNNN-kebab-case.md` (欠番なし)、**採択済みは書き換えず新規 ADR で Supersede**、採択日 ISO 形式。**更新順**: ADR (なぜ) → architecture (どう動くか) → コード (drift 注意)
 
-| スキル | 用途 |
-|--------|------|
-| `/docs-init` | 新プロジェクトに docs/ 標準構造を展開 |
-| `/docs-visualize` | C4 + 状態機械 + シーケンスで可視化 |
-| `/adr-new <題>` | 通し番号自動採番で ADR 作成 |
-| `/docs-publish pdf\|docx <md>` | Markdown を mermaid 図を保持したまま PDF/Word に変換 (人間向け配布。ADR-0012) |
+## ドメイン固有スキル (詳細は各 SKILL.md / docs)
 
-- **ADR 運用**: ファイル名 `NNNN-kebab-case.md` (欠番なし)、採択済みは書き換えず新規 ADR で Supersede、採択日は ISO 形式
-- **更新順**: ADR (なぜ) → architecture (どう動くか) → コード (実装)。図が drift しないよう注意
-- 人間がコピペするプロンプト雛形は [`prompts/docs-visualize.md`](prompts/docs-visualize.md)
+各スキルの description は毎セッション自動ロードされるため、ここには**索引 1 行 + 操作時の安全原則**のみ置く (手順は重複させない)。
 
-## デザイン個性付け (AIっぽさ回避)
-
-生成 AI の UI/スライドが median (青紫グラデ・glassmorphism・Inter 既定…) に収束する問題を、意図的に偏らせたデザイン DNA の注入で解く。
-根拠: [`docs/adr/0004`](docs/adr/0004-deliberate-design-bias.md) / 内部: `skills/design-voice/` (`anti-tells.md`, `scripts/ai_smell_lint.py`)
-
-| スキル | 用途 |
-|--------|------|
-| `/design-voice extract` | 参照例から個性を抽出しプロファイル生成 |
-| `/design-voice use` | プロファイルを context 注入 (ソフト適用) |
-| `/design-voice critic` | 「AI臭スコア」採点 + 閾値未満まで再生成 (ハード、a11y ガードレール必須) |
-
-軽微な用途は `use` のソフト適用のみ。仕上げ・量産時に `critic` を回す。
-
-## Figma 連携 (REST + リモート MCP の併用)
-
-Figma へのアクセスは **認証も用途も別の 2 経路**を使い分ける。混同しない。
-
-| 経路 | 認証 | 向き |
-|---|---|---|
-| `/figma` スキル (REST API) | PAT `~/.figma_token` | ヘッドレス/バッチ: 画像一括書き出し・design tokens 抽出・コメント巡回・キー横断。**レート制限はここで問題化するので skill が version 差分キャッシュ + スロットル + 429 バックオフで制御** |
-| リモート MCP `https://mcp.figma.com/mcp` | OAuth (PAT 不可) | 対話的に「このリンク/フレーム→コード化」。Figma 自前の codegen が勝る。`claude plugin install figma@claude-plugins-official` → `/plugin` で OAuth 許可 |
-
-- ローカル MCP (`127.0.0.1:3845`) はデスクトップアプリ常駐前提で **Linux 不可**。本環境では上記 2 経路のみ。
-- レート制限を気にする処理 (一括/横断/CI) は必ず `/figma` 経由 (生 curl で叩かない)。`/figma cache status` で節約数を確認。
-- 抽出した tokens は `/design-voice` のプロファイル素材にできる。
-
-| スキル | 用途 |
-|--------|------|
-| `/figma inspect <key\|url>` | **デザイン取り込みの主役**: 画像で視覚把握 + 画像で取りにくい text/px/色/スタイルを構造データ抽出 (画像優先アプローチ) |
-| `/figma file\|nodes <key\|url>` | ファイル/ノード取得 (version 差分キャッシュ・既定は要約、`--out` で全 JSON) |
-| `/figma images <key\|url> --ids` | 画像一括書き出し (バッチ + version キャッシュ) |
-| `/figma tokens <key\|url>` | Variables/Styles を design tokens 化 |
-| `/figma cache status` | キャッシュ統計・節約できたリクエスト数 |
-
-## New Relic 連携 (案件=別顧客テナント)
-
-受託では案件ごとに**別顧客の New Relic テナント**を触る。間違ったテナントへのクエリ=顧客データ混線 (gh の `_chd` 事故と同型)。**いまどの顧客アカウントを見ているかを常に明示・検証可能にし、暗黙の既定に倒さない (fail-closed)** を最優先する。**認証も用途も別の 2 経路**を使い分ける。
-根拠: [`docs/adr/0008`](docs/adr/0008-newrelic-connection-hybrid.md) / 詳細: [`docs/design/newrelic-skill.md`](docs/design/newrelic-skill.md)
-
-| 経路 | 認証 | 向き |
-|---|---|---|
-| `/newrelic` スキル (NerdGraph 直) | profile `~/.newrelic/<名>.env` (600) | ヘッドレス/バッチ/CI/**複数顧客横断**。`--profile` 明示でテナント取り違えを防ぎ、レート/リージョン/監査を制御 |
-| per-project 公式リモート MCP | User Key (`NRAK-*`) / OAuth | **単一テナント repo の対話探索**。NRQL/ダッシュボード/アラートの NR メンテ tool surface |
-
-- 横断・共有 repo は MCP に頼らず `/newrelic --profile` を呼び出し毎に使う。per-project MCP は `/newrelic init` が `.newrelic-profile` から `.mcp.json` を生成 (手書き禁止)。**New Relic MCP は global 登録しない** (付け忘れ=接続不能で fail-closed)。
-- `.newrelic-profile`・`.envrc` は **commit しない** (`.gitignore`、顧客名漏洩防止)。鍵は argv に出さず profile ファイルから読む。
-- MCP 接続後・不安時は `/newrelic doctor` で「MCP と skill が同一顧客を指す」三者一致を検証してから対話する。リージョンは US 既定・EU 切替。
-
-| スキル | 用途 |
-|--------|------|
-| `/newrelic whoami\|doctor` | 鍵が見える account/region の確認 / 三者一致検証 |
-| `/newrelic nrql "<NRQL>"` | NerdGraph で NRQL 実行 (account は profile から) |
-| `/newrelic entities\|dashboards\|alerts` | エンティティ/ダッシュボード/アラート参照 |
-| `/newrelic init [dir] --profile <名>` | 案件 repo の雛形展開 (.newrelic-profile + .mcp.json + .gitignore) |
-
-## 3D プリンタ造形 (build123d)
-
-build123d で 3D プリント向け造形を「書く→診断→視認→調整」で反復する。横断知識(規約・嵌合較正・診断・視覚 FB・環境)は `/cad-print` が媒介し、各プロジェクトは造形指示に集中する。
-根拠: [`docs/adr/0007`](docs/adr/0007-build123d-3d-printing-cad-skill.md) / 詳細: [`docs/design/cad-print-skill.md`](docs/design/cad-print-skill.md)
-
-- 診断(干渉/クリアランス/肉厚/オーバーハング/ビルドボリューム)は **skill 自前**(build123d/trimesh/OCP)。cad-khana は HLR 線画のみ optional(現状 pre-alpha 依存衝突で無効、将来 vendoring)
-- **嵌合較正は `fit()` で一点管理**(Bambu A1 mini / X2D / H2D × 素材の seed、実機は `calib gauge` で確定)。マジックナンバー禁止
-- 描画は既定 **matplotlib(GL 不要・確実)**、pyrender(GL)は opt-in。重い OCP env は初回オンデマンド構築(ADR-0005 方式)
-
-| スキル | 用途 |
-|--------|------|
-| `/cad-print init <dir>` | プロジェクト雛形展開(part.py / model.toml / calibration.toml) |
-| `/cad-print build <part.py>` | 診断 + シェーディング多視点 PNG + STL 出力(主ループ) |
-| `/cad-print check\|render\|export` | 診断のみ / 描画のみ / STEP・STL・3MF 出力 |
-| `/cad-print fit\|calib gauge` | 較正値の確認 / 実機較正ガウジ生成 |
-
-## シェル環境 (モダン CLI ツール)
-
-Rust 製モダン CLI (`rg`, `fd`, `bat`, `eza`, `dust`, `btm`, `procs`, `delta`, `sd`, `hyperfine`, `tldr`, `jless`, `tokei`, `zoxide`) を使いこなすための仕組み。
-
-- `/cli-help <tool>` で使い方を即引き (旧コマンド名でも逆引き可)。シェルでは `cheat <tool>` 関数 + soft reminder (`grep`/`find`/`cat` 等を関数ラップ、`command grep` でバイパス)
-- 仕組みの有効化は `install.sh` が `~/.bashrc` に追記。全停止は `export MODERN_CLI_HINTS=0`
-- 推奨ツールの一括導入: `bash scripts/install-modern-cli.sh` (cargo 経由、`install.sh` 本体には含めない)
+- **デザイン個性付け** `/design-voice` — median な「AIっぽさ」を意図的バイアスで回避 (`extract`/`use`/`critic`)。根拠 [`ADR-0004`](docs/adr/0004-deliberate-design-bias.md)
+- **Figma** `/figma` — 画像取込・design tokens 抽出・画像一括書き出し (REST)。対話的コード化は別経路のリモート MCP。**安全原則: Figma API を生 curl で叩かない (レート制御は必ず `/figma` 経由)・PAT/OAuth の 2 経路を混同しない・ローカル MCP は Linux 不可**。導入は [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)
+- **New Relic** `/newrelic` — 案件=別顧客テナント (取り違え=顧客データ混線、gh `_chd` 事故と同型)。**安全原則: いまどの顧客アカウントかを常に明示・検証可能にし暗黙の既定に倒さない (fail-closed)・New Relic MCP は global 登録しない・`.newrelic-profile`/`.envrc` は commit しない・鍵は argv に出さない**。接続後は `/newrelic doctor` で三者一致を検証。根拠 [`ADR-0008`](docs/adr/0008-newrelic-connection-hybrid.md) / 導入 [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)
+- **3D プリンタ造形** `/cad-print` — build123d で「書く→診断→視認→調整」。嵌合較正は `fit()` で一点管理 (マジックナンバー禁止)。根拠 [`ADR-0007`](docs/adr/0007-build123d-3d-printing-cad-skill.md)
+- **シェル環境** `/cli-help` — モダン CLI (rg/fd/bat/eza…) の即引き + soft reminder。導入・全停止 (`MODERN_CLI_HINTS=0`): [`docs/setup/modern-cli-setup.md`](docs/setup/modern-cli-setup.md)
+- ハードウェア系 (`/rigol-dho804` / `/webcam-jetson` / `/atopile-view` / `/mosh-clean`) はユーザー明示起動 (常時ロード対象外)
 
 ## このリポジトリ (agent-rules) の運用
 
-`agent-rules` は **ルール・テンプレート・スキルの単一ソース**。各マシンの `~/CLAUDE.md`, `~/RULES.md`, `~/AGENTS.md`, `~/.claude/skills/*` は本リポへの symlink で同期する。
+`agent-rules` は **ルール・テンプレート・スキルの単一ソース**。各マシンの `~/CLAUDE.md`, `~/RULES.md`, `~/AGENTS.md`, `~/.claude/skills/*` は本リポへの symlink で同期する (= main への変更は全セッションに即時配布。事故時は main への revert PR で即時ロールバック)。
 
 ```bash
 git clone https://github.com/elm-inc/agent-rules ~/repos/github.com/elm-inc/agent-rules
