@@ -62,6 +62,16 @@ Claude 側を整えても、zellij のセッションが別レイヤーで溜ま
 
 - **ハブは session-manager** (`Ctrl+o w`): 全セッションを一覧・切替・kill。`claude agents` と同じ「窓を巡回しない・ハブで見る」発想を端末側にも適用する
 - **命名で増殖を止める**: 裸の `zellij` 起動はランダム名 (`kind-panda` 等) を量産し、attach せず再起動すると `scm` / `scm-2` のような重複ができる。`zj [名]` (= `zellij attach --create`、引数省略時はカレントディレクトリ名) で **プロジェクト = セッション 1 つ**に集約。さらに**裸 `zellij` (引数なし) 自体も関数ラップで `zj` に流す**ので、`zj` と打たなくても cwd 名セッションに集約される。`list-sessions` 等サブコマンド付きは素通し、ランダム名で新規が欲しいときだけ `command zellij`
+- **マシン/クライアントごとにセッションを分ける (`ZJ_TAG`)**: フォルダ名だけだと、同じ repo を複数マシンから触ったときにセッション名が衝突する。特に **1 台の共有ホストに複数クライアント (laptop / desktop / 携帯 mosh) から入る**構成では、同名セッションに複数 attach = 画面がミラーされてしまう。`zj` は `ZJ_TAG` (or ssh 転送された `LC_ZJ_TAG`) があればセッション名を `<フォルダ>-<tag>` にして分離する (未設定なら従来どおりフォルダ名のみ・後方互換)。
+  - **共有ホスト × 複数クライアント (Case A)**: クライアント側の `~/.ssh/config` でホストごとに別名を切り、`SetEnv LC_ZJ_TAG=laptop` を付ける。`LC_*` は既定の `SendEnv`/`AcceptEnv` (sshd の `AcceptEnv LANG LC_*`) で転送され、ホスト側の `zj` が拾う。
+    ```
+    Host devbox-laptop
+        HostName devbox
+        SetEnv LC_ZJ_TAG=laptop
+    ```
+    → `ssh devbox-laptop` で `agent-rules-laptop` セッションになる。**mosh 注意**: mosh は locale 系 env を引き継ぐが `LC_ZJ_TAG` が mosh-server 越しに残るかは環境依存。接続後に `echo "$LC_ZJ_TAG"` で一度確認し、通らなければ下の明示指定に倒す。
+  - **独立した複数マシン (Case B)**: 各マシンの zellij は別サーバなので名前は物理的に衝突しないが、Remote Control / `claude agents` の統合一覧で見分けたい場合は各マシンの `~/.bashrc` で `export ZJ_TAG="$(hostname -s)"`。
+  - **常に効くフォールバック (env 転送に依存しない)**: `ZJ_TAG=laptop zj` と一発で渡す (フォルダ名は自動・tag だけ手で)。mosh で `LC_*` が通らないときはこれが確実。
 - **worktree を別タブで着手 (引き継ぎ付き)**: `/worktree-start <名> <説明> --tab` で worktree を cwd にした zellij 新タブを開き、cd して**引き継ぎドキュメント** (`<共有.git>/worktree-tasks/<ID>-<名>.md` に ID 付きで集約・永続) を初期プロンプトに渡して `claude` を自動起動。子が親の意図・方針を引き継いで着手する。別 zellij セッションより軽い「真の並列」着手
 - **死骸を一掃**: `zjreap` (= `zellij delete-all-sessions -y`) は **EXITED だけ削除し実行中は触らない** (安全)。個別 kill は `zellij kill-session <名>`
 - **そもそも溜めたくない場合**: `~/.config/zellij/config.kdl` で `session_serialization false` にすると EXITED を残さない (resurrect 機能は失う)
