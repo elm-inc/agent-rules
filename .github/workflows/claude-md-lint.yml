@@ -1,0 +1,20 @@
+name: claude-md-lint
+
+# CLAUDE.md の健全性 (行数 <=200 / 幽霊参照ゼロ) を PR で機械検証する (ADR-0013)。
+on:
+  pull_request:
+    paths:
+      - "CLAUDE.md"
+      - "skills/**"
+      - "scripts/lint-claude-md.sh"
+      - ".github/workflows/claude-md-lint.yml"
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: CLAUDE.md lint (行数 + 相互参照)
+        run: bash scripts/lint-claude-md.sh
