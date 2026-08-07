@@ -1,0 +1,35 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '新規セッション: まず /status で前回からの差分 (最近の commit / open PR・Issue / 未保存 memory) を確認してから本題に入ってください。'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '終了前チェック: (1) このセッションで横断再利用しそうな設計判断・実装パターン・調査に触れたなら agent-rules の docs/notes/promotion-candidates.md に候補を 1 行追記 (既存候補と一致すれば 2 回目 = 昇格タスク化)。(2) 受けた依頼・決定で memory 未保存のものがあれば保存。'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/repos/github.com/elm-inc/agent-rules/scripts/claude-guard.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

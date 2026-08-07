@@ -2,7 +2,7 @@
 name: mosh-clean
 description: このホストに残存した mosh-server セッションを一覧し、不要なものを手動で安全に終了する。「mosh のセッションが残っている/溜まっている」「古い mosh を消したい」「mosh-server が大量に動いている」ときに使用。今使っているセッションは自動で保護する
 argument-hint: "[list] | kill <PID> [<PID> ...] [--force]"
-disable-model-invocation: false
+disable-model-invocation: true
 allowed-tools: Bash(python3 ~/repos/github.com/elm-inc/agent-rules/skills/mosh-clean/scripts/mosh_clean.py*) Bash(ps *) Bash(who *) Bash(ss *) Read
 ---
 
