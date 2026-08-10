@@ -1,6 +1,6 @@
 ---
 name: design-voice
-description: AI生成物(UI/フロントエンド・プレゼン/スライド)に意図的なバイアス(デザイン的個性)を与え、median な「AIっぽさ」から離脱させる。参照例から個性を抽出してプロファイル化し、生成時に注入(ソフト)、仕上げに批評ループで矯正(ハード)する。「AIっぽい見た目を避けたい」「デザインに個性を出したい」「house-style を効かせたい」「量産で似通うのを防ぎたい」ときに使用
+description: AI生成物(UI・スライド)に意図的なデザイン個性を与え median な「AIっぽさ」から離脱させる。参照例から個性を抽出→生成時に注入(ソフト)、仕上げに批評ループで矯正(ハード)。house-style を効かせたい・量産で似通うのを防ぎたいときに使用
 argument-hint: "extract <参照...> [--name <profile>] | use <profile> [--persist] | use --list | critic [<target>] [--profile <name>] [--threshold N]"
 disable-model-invocation: false
 allowed-tools: Bash(python3 *) Bash(cat *) Bash(ls *) Bash(rg *) Bash(fd *) Bash(jq *) Bash(test *) Bash(find *) Bash(head *) Bash(git *) Bash(curl *) Read Write WebFetch

@@ -20,10 +20,10 @@ elm-inc プロジェクト全体の現状を 1 画面に集約して表示する
 ## 実行手順
 
 ### 1. スコープ決定
-- ルート: `/home/elmo/repos/github.com/elm-inc`
+- ルート: `~/repos/github.com/elm-inc`
 - 対象リポジトリ検出:
   ```bash
-  find /home/elmo/repos/github.com/elm-inc -maxdepth 2 -name ".git" -type d -printf "%h\n" | sort
+  find ~/repos/github.com/elm-inc -maxdepth 2 -name ".git" -type d -printf "%h\n" | sort
   ```
 - `--repo <名前>` 指定時はそれだけに絞る
 
@@ -52,7 +52,7 @@ REGISTRY="$(git rev-parse --git-common-dir)/parallel-tasks.json"
 
 ### 3. Project Memory を確認
 ```bash
-MEMORY_DIR=/home/elmo/.claude/projects/-home-elmo-repos-github-com-elm-inc/memory
+MEMORY_DIR=$HOME/.claude/projects/-home-elmo-repos-github-com-elm-inc/memory
 ```
 
 - `MEMORY.md` を読む (インデックス)

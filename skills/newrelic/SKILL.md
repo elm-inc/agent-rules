@@ -1,6 +1,6 @@
 ---
 name: newrelic
-description: New Relic を案件(=別顧客テナント)取り違えなく扱う。バッチ/CI/横断は NerdGraph 直の skill (profile 解決は fail-closed・呼び出し毎にアクティブ profile を echo・3者一致検証 doctor・監査ログ)。対話探索は per-project の公式リモート MCP を案内する。NRQL 実行・エンティティ/ダッシュボード/アラート参照・whoami 確認・案件 repo の init に使用
+description: New Relic を案件=別顧客テナント取り違えなく扱う (profile fail-closed)。バッチ/CI/横断は NerdGraph 直 skill、NRQL・エンティティ/ダッシュボード参照・案件 repo init に使用。対話探索は公式リモート MCP を案内
 argument-hint: "<subcommand> | whoami | doctor | nrql \"<NRQL>\" | entities | dashboards | alerts | profile list|show|path | init [dir] --profile <名>"
 disable-model-invocation: false
 allowed-tools: Bash(uv *) Bash(cat *) Bash(ls *) Bash(test *) Bash(direnv *) Read Write

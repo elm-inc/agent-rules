@@ -35,7 +35,7 @@ ls docs/adr/[0-9]*.md 2>/dev/null \
 ひな形 (空フォーム) を読み込む。優先順位:
 
 1. プロジェクトローカルの `docs/_templates/adr.md` (あれば。`/docs-init` が展開済み)
-2. なければ agent-rules 正本 `/home/elmo/repos/github.com/elm-inc/agent-rules/templates/docs/_templates/adr.md`
+2. なければ agent-rules 正本 `~/repos/github.com/elm-inc/agent-rules/templates/docs/_templates/adr.md`
 
 読み込んだら以下を置換:
 

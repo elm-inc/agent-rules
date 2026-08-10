@@ -1,3 +1,6 @@
 .codex/local/
 __pycache__/
 *.pyc
+
+# ナレッジ昇格台帳はローカル専用 (機密案件情報の public 混入防止・ADR-0013)
+docs/notes/promotion-candidates.md

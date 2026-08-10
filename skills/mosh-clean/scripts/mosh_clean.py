@@ -131,7 +131,7 @@ def _who():
     for line in out.splitlines():
         if "mosh" not in line:
             continue
-        # 例: elmo pts/8 2026-06-27 13:44 . 1633893 (100.86.37.21 via mosh [1633893])
+        # 例: user pts/8 2026-06-27 13:44 . 1633893 (100.x.y.z via mosh [1633893])
         ipm = re.search(r"(\d+\.\d+\.\d+\.\d+)", line)
         pidm = re.search(r"\[(\d+)\]", line) or re.search(r"\s(\d{2,})\s", line)
         datem = re.search(r"(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2})", line)

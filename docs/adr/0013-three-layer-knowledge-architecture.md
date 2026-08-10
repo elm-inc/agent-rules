@@ -83,3 +83,7 @@
 - [ADR-0010](0010-fable-metered-billing-controls.md) — コスト規律 (CLAUDE.md 残置の安全原則 3 に対応)
 - [ADR-0011](0011-ai-first-docs-architecture.md) — エビデンス規律・CI 基盤 (行数/相互参照 lint の載せ先)
 - [ADR-0001](0001-multi-llm-development-workflow.md) / [ADR-0006](0006-orchestration-methods.md) — 本 ADR が索引を刈り込む対象のワークフロー本体
+
+## 改訂履歴
+
+- **2026-08-11 追記 (台帳のローカル専用化)**: 昇格台帳 `docs/notes/promotion-candidates.md` を **gitignore・ローカル専用**に変更した。agent-rules は public リポであり、台帳に他プロジェクト (機密顧客案件を含む) の名称・内部設計が生エントリとして蓄積されるのは情報リーク源になるため。本文の「uncommitted 追記でよい・コミットは昇格 PR 時」は次のとおり訂正する: **台帳自体は commit しない**。commit するのは昇格後の**抽象化された rule / ADR** だけ (案件名・内部設計を落とした一般形)。検知・照合はローカルの台帳で従来どおり機能する (単一マシン運用が前提。複数マシン集計は将来課題のまま)。
