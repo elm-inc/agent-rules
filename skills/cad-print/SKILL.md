@@ -1,6 +1,6 @@
 ---
 name: cad-print
-description: build123d で 3D プリンタ向けの造形を「書く→診断→視認→調整」で反復する媒介スキル。嵌合較正 fit() でクリアランス/圧入を一点管理し、干渉/クリアランス/肉厚/オーバーハング/ビルドボリュームを自前診断し、シェーディング多視点 PNG で形を視認し、STEP/STL/3MF を出力する。Bambu A1 mini / X2D / H2D 対応。3Dモデリング・CAD・3Dプリント・嵌合・造形指示のときに使用
+description: build123d で 3D プリンタ造形を「書く→診断→視認→調整」で反復。嵌合較正 fit() で一点管理し干渉/肉厚/オーバーハングを自前診断、多視点 PNG で視認、STEP/STL/3MF 出力。Bambu A1 mini/X2D/H2D 対応。3Dモデリング・CAD・3Dプリント・造形指示のときに使用
 argument-hint: "<subcommand> [args] | init <dir> | build <part.py> | check | render | export --format | fit | calib gauge | conventions | env"
 disable-model-invocation: false
 allowed-tools: Bash(python3 ~/repos/github.com/elm-inc/agent-rules/skills/cad-print/scripts/cad_print.py*) Bash(python3 ~/.claude/skills/cad-print/scripts/cad_print.py*) Bash(uv *) Bash(ls *) Bash(cat *) Bash(test *) Read Write Edit

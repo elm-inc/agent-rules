@@ -52,7 +52,7 @@
 
 各プロジェクトでゼロベース設計を繰り返さないための仕組み ([`ADR-0013`](docs/adr/0013-three-layer-knowledge-architecture.md))。3 層構成: **L1 判断基準** (本ファイル・RULES.md — symlink で全プロジェクト常時適用) / **L2 再利用資産** (`templates/`・`.claude/rules/`・skills — `/project-init` で展開) / **L3 プロジェクト固有** (各リポ CLAUDE.md・memory)。
 
-**2 回目ルール (台帳照合型)**: 横断再利用しそうな設計判断・実装パターン・調査に触れたら **1 回目に中央台帳 [`docs/notes/promotion-candidates.md`](docs/notes/promotion-candidates.md) へ記録** (uncommitted 追記でよい・コミットは昇格 PR 時)。記録時に既存候補と照合し、**一致 (=2 回目) したら agent-rules へ昇格**する。project memory はプロジェクト毎に隔離されるため、この台帳が唯一の横断検知点。
+**2 回目ルール (台帳照合型)**: 横断再利用しそうな設計判断・実装パターン・調査に触れたら **1 回目に中央台帳 `docs/notes/promotion-candidates.md` へ記録**。記録時に既存候補と照合し、**一致 (=2 回目) したら agent-rules へ昇格**する。project memory はプロジェクト毎に隔離されるため、この台帳が唯一の横断検知点。**台帳は gitignore・ローカル専用** (機密案件情報が public に混入するのを防ぐ)。**コミットするのは昇格後の抽象化された rule/ADR だけ** — 台帳の生エントリ (案件名・内部設計を含みうる) は commit しない。
 
 **昇格先**: いつ何を使うかの判断 → 本ファイル / ツール横断 (Codex too) の安全原則 → RULES.md / ファイル種別・stack 規約 → `.claude/rules/*.md` / 手順 → skill / 初期構造 → template / なぜ → ADR。**逆方向**: 四半期見直しで参照されない行を降格・削除 (再肥大化防止)。
 
@@ -66,7 +66,8 @@
 | `/worktree-list` / `/worktree-finish [名]` | 状況・衝突リスク確認 / マージ + 削除 (Linear 自動 Done) |
 
 - 既定は単一セッション (`/worktree-start` → `cd <worktree>` → 作業 → メインに戻り `/worktree-finish`)。真に並列化する独立タスクのみ `--tab` で別セッション (子は親の会話を継がないため引き継ぎ doc `<共有.git>/worktree-tasks/<ID>-<名>.md` が要)
-- レジストリ `<repo>/.git/parallel-tasks.json` を全 worktree から共有参照。多数セッション並行時は `claude agents` (Agent View) をハブに。ランブック: [`docs/setup/session-management.md`](docs/setup/session-management.md)
+- レジストリ `<repo>/.git/parallel-tasks.json` を全 worktree から共有参照。多数セッション並行時は `claude agents` (Agent View) をハブに `/worktree-list`・`/status` と併用。ランブック: [`docs/setup/session-management.md`](docs/setup/session-management.md)
+- **現状把握は `/status`**: セッション開始時や「今どうなってる?」で、最近の commit・open PR/Issue・project memory・未コミット変更を集約表示する
 
 ## Linear イシュー管理
 

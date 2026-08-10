@@ -23,7 +23,7 @@ git rev-parse --show-toplevel
 で取得したパスを以降のベースとする。git リポジトリでなければエラー終了。
 
 ### 2. テンプレ展開
-コピー元: `/home/elmo/repos/github.com/elm-inc/agent-rules/templates/docs/`
+コピー元: `~/repos/github.com/elm-inc/agent-rules/templates/docs/`
 コピー先: `<repo-root>/docs/`
 
 ディレクトリ単位でコピー。**メタ (`_` 接頭辞) と中身で扱いを分ける**:

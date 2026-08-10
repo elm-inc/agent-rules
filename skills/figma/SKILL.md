@@ -1,6 +1,6 @@
 ---
 name: figma
-description: Figma REST API をレート制限に配慮して効率的に使う。version 差分キャッシュ・送信スロットル・429 バックオフ・部分取得/バッチで無駄な呼び出しを構造的に減らす。デザイン取り込みは inspect で「画像で視覚把握 + 画像では取りにくい text/px/色/スタイルを構造データ抽出」を同時に行う。ファイル取得・画像一括書き出し・design tokens 抽出・コメント取得にも使用。対話的な「リンク→コード化」は別経路のリモート MCP を案内する
+description: Figma REST API をレート制限に配慮して使う (version キャッシュ・スロットル・429 バックオフ)。inspect で画像+構造データを同時取得、ファイル/画像書き出し・design tokens 抽出にも使用。対話的な「リンク→コード化」は別経路のリモート MCP を案内する
 argument-hint: "<subcommand> <key|url> [options] | inspect | file | nodes | images | tokens | comments | cache status"
 disable-model-invocation: false
 allowed-tools: Bash(uv *) Bash(cat *) Bash(ls *) Bash(test *) Read Write

@@ -257,14 +257,14 @@ bash ~/repos/github.com/elm-inc/agent-rules/scripts/migrate-hf-cache.sh
 
 AGENT-14 (systemd unit) を **install 済みで未移行パスのまま**なら、unit ファイル
 (`/etc/systemd/system/vllm-qwen-coder.service`) の `ExecStart` 行の
-`-v /home/elmo/models` を `-v /home/elmo/.cache/huggingface` に書き換えてから
+`-v ~/models` を `-v ~/.cache/huggingface` に書き換えてから
 `sudo systemctl daemon-reload && sudo systemctl restart vllm-qwen-coder` を実行。
 
 (`templates/systemd/vllm-qwen-coder.service` の `-v` 行は AGENT-16 移行**後**の
-統一パス `/home/elmo/.cache/huggingface` を既定とする。オンデマンド (ensure-vllm.sh) と
+統一パス `~/.cache/huggingface` を既定とする。オンデマンド (ensure-vllm.sh) と
 同一 cache を見るため、常駐 opt-in でも二重 DL は起きない。AGENT-16 **未移行**マシンで
 systemd unit を入れる場合のみ、テンプレを sed で
-`s|/home/elmo/.cache/huggingface|/home/elmo/models|` して旧パスに戻す。)
+`s|~/.cache/huggingface|~/models|` して旧パスに戻す。)
 
 ## トラブルシューティング
 

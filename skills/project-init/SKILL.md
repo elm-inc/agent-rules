@@ -30,7 +30,7 @@ allowed-tools: Bash(git *) Bash(ls *) Bash(find *) Bash(mkdir *) Bash(cp *) Bash
 git rev-parse --show-toplevel   # repo ルート。git repo でなければエラー終了
 ```
 - **agent-rules 自身の上では実行しない** (別リポの初期化用)。ルートが agent-rules canonical path なら警告して中止
-- テンプレ元: `/home/elmo/repos/github.com/elm-inc/agent-rules/templates/`
+- テンプレ元: `~/repos/github.com/elm-inc/agent-rules/templates/`
 
 ### 2. docs 標準構造
 
