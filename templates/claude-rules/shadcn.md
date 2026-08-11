@@ -31,7 +31,8 @@ paths:
 ## house-style (量産感の回避)
 
 - shadcn 既定のまま量産しない。**house-style は `/design-voice` で抽出したプロファイルを theme preset / `registry:base` に落として適用**する (docs/setup/shadcn.md §4)
-- 新規 UI は「shadcn 既定 + design-voice の house-style」を前提に生成する
+- **定常レギュレーションは design-registry (`@elm/base`) を単一ソースに取り込む** (`shadcn add @elm/base`)。この案件では**差分 (accent 色・フォント等) だけ**を theme preset で重ねる。base を案件内で勝手に再定義しない (ADR-0014・docs/setup/shadcn.md §5)
+- 新規 UI は「`@elm/base` (レギュレーション) + 案件差分」を前提に生成する
 
 ## 認証・秘匿
 

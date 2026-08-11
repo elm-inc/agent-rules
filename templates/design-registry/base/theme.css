@@ -1,0 +1,38 @@
+/* base/theme.css — 定常デザインレギュレーション (単一ソース)
+ * OKLCH の CSS 変数で light/dark を定義。案件はこれを取り込み、差分だけを theme preset で上書きする。
+ * Tailwind v4 (@theme / CSS-first) 前提。変数名は shadcn 標準に合わせる (勝手に改名しない)。
+ * 実際の値・変数セットは公式 (https://ui.shadcn.com/docs/theming) で最新を確認して確定。以下は骨格例。
+ */
+
+:root {
+  /* --- radius / spacing / typography (レギュレーション。案件で変えない定常部) --- */
+  --radius: 0.625rem;
+
+  /* --- color tokens (light) --- */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --border: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  /* … 必要な shadcn 標準変数を網羅する … */
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --border: oklch(0.269 0 0);
+  --ring: oklch(0.556 0 0);
+  /* … light と対で網羅 … */
+}
+
+/* a11y / motion 規約 (レギュレーション) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

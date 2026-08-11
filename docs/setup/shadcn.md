@@ -77,14 +77,38 @@ private / 社内レジストリの認証は `components.json` の `registries` �
 
 トークンは `.env.local` から読ませ、**値を直書きしない** (New Relic の鍵運用と同型)。
 
-## 5. 落とし穴・要確認
+## 5. 案件横断のデザインレギュレーション (design-registry 単一ソース)
+
+案件ごとにデザインは違っても、**基本方針・レギュレーション (トークン・テーマ骨格・a11y/motion 規約) は 1 箇所に定常配置し、案件では差分だけを指示する**のが良い。これは custom registry の `registry:base` で実現できる。**専用リポ `design-registry` を単一ソース**にするのを推奨 (agent-rules の「ルール単一ソース」のデザイン版)。根拠: [`ADR-0014`](../adr/0014-shadcn-design-registry.md)。雛形: `templates/design-registry/`。
+
+| 層 | 中身 | 変更頻度 |
+|---|---|---|
+| **base (レギュレーション)** | CSS 変数 (OKLCH light/dark)・design tokens (radius/spacing/shadow/typography)・global styles・a11y/motion 規約 | 稀 (定常) |
+| **theme preset (ブランド変種)** | 名前付きテーマ。視覚設定のみ配布 (再インストール不要) | 時々 |
+| **house components** (任意) | house-style 済みの Button/Form/Layout 等 | 随時 |
+
+名前空間 (`@elm` 等) + **version tag で pin**。案件側は差分だけ:
+
+```jsonc
+// 案件の components.json
+{ "registries": { "@elm": "https://.../{name}.json" } }
+```
+```bash
+shadcn add @elm/base            # 定常レギュレーションを必ず取り込む
+# その上に案件の差分 (accent 色・フォント等) を theme preset で重ねる
+```
+
+- **「必ず反映」の機械保証**: base を pin し、`shadcn add @elm/base --diff` が空になることを **CI で検査**して drift を防ぐ (agent-rules の `install.sh --check` / lint と同じ発想)
+- **AI への指示**は「base は `@elm` にある。この案件は差分 (accent=X, font=Y) だけ」で済む。`/design-voice` で抽出した個性を theme preset に落として差分にする
+
+## 6. 落とし穴・要確認
 
 - **Tailwind v4 / RSC**: 新規は Base UI 既定 + `tw-animate-css`。Next.js App Router は `components.json` の `"rsc": true`
 - **バージョン差**: v3 系プロジェクトに v4 CLI を混ぜない。`shadcn init --template` の対応フレームワークは版で増減する
 - **未確認 (依存しない)**: サードパーティ `shadcn-registry-mcp`、`registry:hook` の詳細スキーマ、複数 custom registry の同時利用挙動 — 使う場合は都度確認
 - **補完層**: アニメーション系は Magic UI 等が補完。UI プロトタイプ生成は v0 (生成コードは shadcn プロジェクトに drop-in 可)
 
-## 6. 新規フロントエンド案件での導入手順 (まとめ)
+## 7. 新規フロントエンド案件での導入手順 (まとめ)
 
 ```bash
 # 1. 足場 (agent-rules L2)

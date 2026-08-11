@@ -1,0 +1,20 @@
+name: registry-ci
+
+# design-registry (shadcn custom registry) の検証。実際のリポにコピーして使う。
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: registry.json が JSON として妥当か
+        run: node -e "JSON.parse(require('fs').readFileSync('registry.json','utf8')); console.log('registry.json OK')"
+      # 版が固まったら shadcn の build/validate を有効化 (コマンド名は公式で確認):
+      # - name: shadcn registry build
+      #   run: npx shadcn@latest registry:build
