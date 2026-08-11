@@ -1,0 +1,30 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "elm-design-registry",
+  "homepage": "https://github.com/elm-inc/design-registry",
+  "//": "項目型・スキーマは版依存。実装時に https://ui.shadcn.com/docs/registry で確定すること。以下は骨格。",
+  "items": [
+    {
+      "name": "base",
+      "//": "定常レギュレーション。type は shadcn の版に応じて registry:base / registry:style / registry:theme のいずれか。",
+      "type": "registry:base",
+      "files": [
+        { "path": "base/theme.css", "type": "registry:file", "target": "app/globals.css" }
+      ],
+      "cssVars": {
+        "//": "OKLCH 推奨。値は base/theme.css を単一ソースにし、ここは参照 or 同期。",
+        "light": {},
+        "dark": {}
+      }
+    },
+    {
+      "name": "theme-example",
+      "//": "ブランド/案件差分の例 (theme preset)。base の上に accent 色・フォント等だけを上書き。",
+      "type": "registry:theme",
+      "cssVars": {
+        "light": { "primary": "oklch(0.62 0.19 45)" },
+        "dark": { "primary": "oklch(0.70 0.17 45)" }
+      }
+    }
+  ]
+}
