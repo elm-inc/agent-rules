@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '終了前チェック: (1) このセッションで横断再利用しそうな設計判断・実装パターン・調査に触れたなら agent-rules の docs/notes/promotion-candidates.md に候補を 1 行追記 (既存候補と一致すれば 2 回目 = 昇格タスク化)。(2) 受けた依頼・決定で memory 未保存のものがあれば保存。'"
+            "command": "echo '終了前チェック: (1) このセッションで横断再利用しそうな設計判断・実装パターン・調査に触れたなら agent-rules の docs/notes/promotion-candidates.md に候補を 1 行追記 (既存候補と一致すれば 2 回目 = 昇格タスク化)。(2) 受けた依頼・決定で memory 未保存のものがあれば保存。(3) 会話 craft (説明・依頼・調整・設計/テストの作り込み) の学びが多いセッションなら /devlog retro を検討 (私的 dev-log に残す)。'"
           }
         ]
       }
