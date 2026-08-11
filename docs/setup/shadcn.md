@@ -81,7 +81,12 @@ private / 社内レジストリの認証は `components.json` の `registries` �
 
 案件ごとにデザインは違っても、**基本方針・レギュレーション (トークン・テーマ骨格・a11y/motion 規約) は 1 箇所に定常配置し、案件では差分だけを指示する**のが良い。これは custom registry の `registry:base` で実現できる。**専用リポ `design-registry` を単一ソース**にするのを推奨 (agent-rules の「ルール単一ソース」のデザイン版)。根拠: [`ADR-0014`](../adr/0014-shadcn-design-registry.md)。雛形: `templates/design-registry/`。
 
-> ✅ **稼働中**: [`elm-inc/design-registry`](https://github.com/elm-inc/design-registry) (public) が GitHub Pages で配信中。配信 URL は `https://elm-inc.github.io/design-registry/r/{name}.json`、item は `base` (`registry:theme` + `extends:none`) / `theme-example` (preset 雛形)。案件側 `add @elm/base` → preset の順で重なることを実地検証済み。**現状 base は neutral 骨格値**で、本番トークンは `/design-voice` 抽出で差し替える。
+> ✅ **稼働中**: [`elm-inc/design-registry`](https://github.com/elm-inc/design-registry) (public) が GitHub Pages で配信中 (`https://elm-inc.github.io/design-registry/r/{name}.json`)。item:
+> - **`base`** (`registry:theme` + `extends:none`) — 色 (OKLCH light/dark, 由来 shadcn/create preset `b1ZOy0qg4` = indigo/zinc) + **型 scale** (`--text-h1` 等 + `@layer base` の h1..p 既定) + **余白** (`--gutter`/`--section-gap`/`--page-max`) + **sidebar 寸法** (`--app-sidebar-width` 等)
+> - **`app-shell`** (`registry:component`) — Next.js App Router 想定の sidebar+header+content 骨格。`add @elm/app-shell` で shadcn sidebar 等も自動取り込み
+> - **`theme-example`** (preset 雛形) — 案件のブランド差分を base の上に重ねる例
+>
+> `add @elm/base` → `add @elm/app-shell` → preset の順、および `app-shell` が base トークンを消費することを実地検証済み。**性格 (書体の個性・余白リズム)** は `/design-voice` 層で足す。
 
 | 層 | 中身 | 変更頻度 |
 |---|---|---|
@@ -96,12 +101,14 @@ private / 社内レジストリの認証は `components.json` の `registries` �
 { "registries": { "@elm": "https://elm-inc.github.io/design-registry/r/{name}.json" } }
 ```
 ```bash
-shadcn add @elm/base            # 定常レギュレーションを必ず取り込む
+shadcn add @elm/base            # 定常レギュレーション (色・型・余白・sidebar 寸法) を必ず取り込む
+shadcn add @elm/app-shell       # レイアウト骨格 (sidebar+header+content)。近いレイアウトはこれを土台に
 # その上に案件の差分 (accent 色・フォント等) を theme preset で重ねる
 ```
 
 - **「必ず反映」の機械保証**: base を pin し、`shadcn add @elm/base --diff` が空になることを **CI で検査**して drift を防ぐ (agent-rules の `install.sh --check` / lint と同じ発想)
-- **AI への指示**は「base は `@elm` にある。この案件は差分 (accent=X, font=Y) だけ」で済む。`/design-voice` で抽出した個性を theme preset に落として差分にする
+- **AI への指示の一貫性**: 案件に **`.claude/rules/elm-design-layout.md`** (雛形: `templates/claude-rules/`) を配ると、「サイドバー付き管理画面を作って」等の指示が毎回 `AppShell` + base トークンで出力される (`/shadcn` step 4 が自動配置)。「base は `@elm` にある。差分だけ」で済む
+- **性格**は `/design-voice` で抽出して theme preset に落とす。レギュレーション (共通の構造・型・余白) と個性 (性格) を層分けする
 
 ## 6. 落とし穴・要確認
 
