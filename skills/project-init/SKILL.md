@@ -62,6 +62,19 @@ test -f <repo>/CLAUDE.md || cp templates/project-claude-md.md <repo>/CLAUDE.md
 ```
 > New Relic の `.newrelic-profile`/`.envrc` は顧客名漏洩防止で commit 禁止 (安全原則)。`/newrelic init` を使う場合はそちらが専用 .gitignore を生成するため二重にならないよう確認する。
 
+### 5.5 フロントエンド (React/shadcn) 案件のとき (任意)
+
+shadcn/ui を使うなら以下を追加する (詳細・バージョン前提: [`docs/setup/shadcn.md`](../../docs/setup/shadcn.md))。「自作せず公式を配線」が原則:
+
+```bash
+pnpm dlx shadcn@latest init --template next        # or vite/react-router/astro
+pnpm dlx shadcn@latest mcp init --client claude    # .mcp.json (per-project・global 登録しない)
+pnpm dlx skills add shadcn/ui                       # 公式 skill (skill-audit-checklist で監査してから)
+```
+- `.claude/rules/shadcn.md` を `templates/claude-rules/shadcn.md` からコピー配置 (Tailwind v4/RSC/primitives 規約)
+- house-style は `/design-voice` で抽出 → shadcn の theme preset / `registry:base` に落として量産感を回避
+- `.mcp.json` は既定で gitignore (§5)。shadcn のは秘匿を含まないが、各自 `mcp init` で再生成できるため共有不要
+
 ### 6. ユーザーレベル settings の確認 (促しのみ)
 
 L1 の安全原則を機械 enforcement する `~/.claude/settings.json` (permissions/hook) が未適用なら、`templates/claude-settings/settings.user.json` の手動マージ or `install.sh --fix` を案内する (このスキルは ~/.claude を勝手に触らない)。
