@@ -1,0 +1,33 @@
+# design-registry drift 検査 (案件リポの .github/workflows/ に置く雛形)
+#
+# 目的: @elm/base の managed 域が案件で直接書き換えられていないかを機械検査する。
+#   `add @elm/base --diff` が差分を出す = managed が直接編集された = カスタムが base 更新で
+#   消えるリスク。fail させ、owned 層 (app/theme.overrides.css) への移動を促す。
+#
+# 前提: 案件の components.json に @elm registry が配線済み (public 配信)。
+# 注意: `--diff` の出力仕様・exit code は shadcn の版依存。運用前に実挙動でしきい値を確認する。
+name: design-registry-drift
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  base-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: install
+        run: pnpm install --frozen-lockfile
+      - name: "@elm/base が直接編集されていない (diff が空)"
+        run: |
+          pnpm dlx shadcn@latest add @elm/base --diff | tee /tmp/base.diff
+          if [ -s /tmp/base.diff ]; then
+            echo "::error::@elm/base の managed 域に差分があります。トークンの上書きは app/theme.overrides.css へ移してください (base 更新で消えます)。"
+            exit 1
+          fi
