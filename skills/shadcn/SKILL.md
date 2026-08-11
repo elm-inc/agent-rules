@@ -56,7 +56,7 @@ test -f .claude/rules/shadcn.md || cp ~/repos/github.com/elm-inc/agent-rules/tem
 
 house-style の定常レギュレーションを単一ソースから取り込む (ADR-0014):
 
-- `components.json` の `registries` に `@elm` を追加 (URL は design-registry の配信先)。private なら `headers` に `Authorization: Bearer ${REGISTRY_TOKEN}` (値は `.env.local`、直書き禁止)
+- `components.json` の `registries` に `@elm` を追加: `"@elm": "https://elm-inc.github.io/design-registry/r/{name}.json"` (public・稼働中)。private registry を使う場合のみ `{ "url": ..., "headers": { "Authorization": "Bearer ${REGISTRY_TOKEN}" } }` 形式 (値は `.env.local`、直書き禁止)
 ```bash
 pnpm dlx shadcn@latest add @elm/base        # 定常レギュレーションを取り込む
 ```

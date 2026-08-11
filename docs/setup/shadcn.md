@@ -81,6 +81,8 @@ private / 社内レジストリの認証は `components.json` の `registries` �
 
 案件ごとにデザインは違っても、**基本方針・レギュレーション (トークン・テーマ骨格・a11y/motion 規約) は 1 箇所に定常配置し、案件では差分だけを指示する**のが良い。これは custom registry の `registry:base` で実現できる。**専用リポ `design-registry` を単一ソース**にするのを推奨 (agent-rules の「ルール単一ソース」のデザイン版)。根拠: [`ADR-0014`](../adr/0014-shadcn-design-registry.md)。雛形: `templates/design-registry/`。
 
+> ✅ **稼働中**: [`elm-inc/design-registry`](https://github.com/elm-inc/design-registry) (public) が GitHub Pages で配信中。配信 URL は `https://elm-inc.github.io/design-registry/r/{name}.json`、item は `base` (`registry:theme` + `extends:none`) / `theme-example` (preset 雛形)。案件側 `add @elm/base` → preset の順で重なることを実地検証済み。**現状 base は neutral 骨格値**で、本番トークンは `/design-voice` 抽出で差し替える。
+
 | 層 | 中身 | 変更頻度 |
 |---|---|---|
 | **base (レギュレーション)** | CSS 変数 (OKLCH light/dark)・design tokens (radius/spacing/shadow/typography)・global styles・a11y/motion 規約 | 稀 (定常) |
@@ -91,7 +93,7 @@ private / 社内レジストリの認証は `components.json` の `registries` �
 
 ```jsonc
 // 案件の components.json
-{ "registries": { "@elm": "https://.../{name}.json" } }
+{ "registries": { "@elm": "https://elm-inc.github.io/design-registry/r/{name}.json" } }
 ```
 ```bash
 shadcn add @elm/base            # 定常レギュレーションを必ず取り込む
