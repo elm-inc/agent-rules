@@ -51,6 +51,20 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 
 軽微な変更では `/local-review` + pre-commit のみで十分。`/gemini-review` は 10+ ファイル変更や ADR drift 疑い時のみ。`/fable-review` はセキュリティ・課金・データ破壊・公開 API・並行処理などの高リスク変更のみ (条件表: `skills/fable-review/SKILL.md`)。
 
+### 検証ループ recipe (verification / adversarial) — 2026-08 トレンド取り込み
+
+レビューを「意見」で終わらせず、**経験的に検証して絞る**のが 2026 の定番 (最終品質 2-3x 改善の報告あり)。本リポの実践形:
+
+1. **自己検証ループ**: 変更は「実行して確かめる」— build → test → observe (UI はスクショ)。AI が**合否を自走判定できる check** を与える (テスト・lint・`--dry-run`/`--diff`・E2E)。単発は `/verify`、多段は受け入れ基準を仕様に明記
+2. **敵対的検証 (adversarial)**: 外部レビュアー (`/deepseek-redteam` で仮説生成・`/codex-review` で異種ベンダー・`/gemini-review` で横断) が指摘を出し、**Claude が経験的に調査して真偽を filter** する。所見は 集約→重複排除→重要度ランク付け してから対処 (盲目的採用しない)
+3. **機械検証の床**: pre-commit (ruff/mypy/semgrep)・CI lint・`/mutation-check` を最前段フィルタに
+
+要点: レビュー指摘を**そのまま採用せず、実行可能な check で裏取りしてから**反映する。出典: [Building verification loops (Anthropic)](https://claude.com/blog/building-verification-loops-in-claude-code-with-skills) (2026-08 参照)。
+
+### spec-driven / 受け入れ基準 (Spec Kit の思想)
+
+実装前に**仕様 + 各基準の pass/fail を確認する実行可能手段**を書く (drift 防止)。本リポは `docs/design/*.md` の受け入れ基準 + 検証手段欄で実践済み。フォーマットの参考に [GitHub Spec Kit](https://github.com/github/spec-kit) (2026-08 参照)。仕様が固まったら redteam → 実装 → 上記検証ループ、の順。
+
 ## 4. ベンチマーク実績 (Phase 4 試運転)
 
 | スキル | LLM | 入力 tok | 出力 tok | 思考 tok | 応答時間 | 1 回コスト |

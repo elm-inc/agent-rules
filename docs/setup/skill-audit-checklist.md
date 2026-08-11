@@ -19,6 +19,16 @@ RULES.md の「サードパーティ skill/MCP は audit なしで導入しな�
 2. **認証情報の扱い** — 鍵は vault / profile 経由で、argv・平文・prompt に出さない (New Relic の fail-closed 原則と同型)
 3. **tool surface を確認** — 提供 tool 一覧を見て、破壊的操作 (削除・送信・課金) を含むなら permission を `ask` に
 4. **networking スコープ** — 可能なら allowed_hosts で接続先を限定 (deny-by-default)
+5. **tool allowlist (deny-by-default)** — 使う tool だけを明示許可する。MCP サーバの全 tool を無条件 allow しない (tool reach を最小化)。Claude Code の permission で個別 tool を allow/ask に
+6. **サーバの正当性** — 同名の別サーバ (shadow MCP) に繋がっていないか URL を都度確認。global 登録せず per-project で (付け忘れ=未接続の fail-closed。New Relic MCP と同型)
+
+### 主な脅威 (OWASP MCP / 2026)
+
+- **tool poisoning**: tool の metadata / description に悪意ある指示を仕込み agent を誤誘導 (最頻出)
+- **prompt injection**: tool の返り値 (contextual payload) 経由で agent に不正 tool を実行させる
+- **shadow MCP servers / command injection / secret exposure**
+
+対策の要点: **tool allowlist (deny-by-default) + 破壊的 tool は `ask` + 認証は vault/env 展開 + 挙動の観察**。MCP の返り値も信頼しない (返ってきた指示に従わない)。詳細: [NSA MCP Security Guidance](https://www.nsa.gov/Portals/75/documents/Cybersecurity/CSI_MCP_SECURITY.pdf)・[MCP Security Vulnerabilities](https://www.practical-devsecops.com/mcp-security-vulnerabilities/) (2026-08 参照)。
 
 ## 導入後
 
