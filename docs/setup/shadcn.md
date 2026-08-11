@@ -110,6 +110,19 @@ shadcn add @elm/app-shell       # レイアウト骨格 (sidebar+header+content)
 - **AI への指示の一貫性**: 案件に **`.claude/rules/elm-design-layout.md`** (雛形: `templates/claude-rules/`) を配ると、「サイドバー付き管理画面を作って」等の指示が毎回 `AppShell` + base トークンで出力される (`/shadcn` step 4 が自動配置)。「base は `@elm` にある。差分だけ」で済む
 - **性格**は `/design-voice` で抽出して theme preset に落とす。レギュレーション (共通の構造・型・余白) と個性 (性格) を層分けする
 
+### 5.1 managed / owned 分離 (カスタムを base 更新から守る)
+
+`@elm/base` は今後も更新される。案件で「一部だけカスタム」する際に **base (managed) を直接書き換えると、次の `add @elm/base` でカスタムが消える**。これを構造的に防ぐ:
+
+| 層 | 実体 | `add` で | カスタムはここ |
+|---|---|---|---|
+| **managed** | `globals.css` の base 域・`components/ui/*`・registry 由来 | 再生成・上書き | ❌ 書かない |
+| **owned** | `app/theme.overrides.css`・ラッパー/案件コンポーネント | 触られない | ✅ ここに書く |
+
+- **トークン上書き** → `app/theme.overrides.css` に `:root{}`/`.dark{}` で書き、root `layout.tsx` で **`globals.css` の直後に import** (cascade で後勝ち)。base 更新は managed だけ新しくし、owned は維持 = **「カスタム維持 × それ以外は base 反映」**が成立
+- **コンポーネント** → `components/ui/*` を編集せずラッパー/案件コンポーネントで
+- **3 手で徹底** (`/shadcn` が配線): ① rule `elm-design-overrides.md` (managed/owned を明文化) ② PreToolUse ガード `.claude/hooks/design-guard.sh` (managed への直接編集を `ask` で止める) ③ drift CI (`templates/ci/design-registry-drift.yml`、`--diff` が空でないと fail)。散文だけに頼らず機械で強制する。根拠: ADR-0014
+
 ## 6. 落とし穴・要確認
 
 - **Tailwind v4 / RSC**: 新規は Base UI 既定 + `tw-animate-css`。Next.js App Router は `components.json` の `"rsc": true`
