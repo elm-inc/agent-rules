@@ -1,0 +1,21 @@
+name: flow-lint
+
+# 業務フロー図 (*.flow.md) の標準準拠を機械検証する (ADR-0015)。
+on:
+  pull_request:
+    paths:
+      - "**/*.flow.md"
+      - "scripts/lint-flow-diagram.py"
+      - ".github/workflows/flow-lint.yml"
+  push:
+    branches: [main]
+
+jobs:
+  flow-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: 業務フロー図 lint (書式一貫性 + 記載漏れ)
+        run: python3 scripts/lint-flow-diagram.py --glob '**/*.flow.md'

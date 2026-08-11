@@ -90,6 +90,7 @@
 
 - ディレクトリ: `docs/adr/` (なぜ) / `docs/architecture/` (C4 + 状態/シーケンス図) / `docs/design/` (実装計画・仕様) / `docs/_templates/` (記入用ひな形)
 - スキル: `/docs-init` (標準構造展開) / `/docs-visualize` (C4 + 状態機械で可視化) / `/adr-new <題>` (自動採番) / `/docs-publish pdf|docx <md>` (mermaid 保持のまま人間向け配布・[`ADR-0012`](docs/adr/0012-human-facing-docs-publish-model.md))
+- **業務フロー図** `/flow-diagram` — Mermaid の業務フローを標準スタイル + 必須情報で作り、`lint-flow-diagram.py` で書式ブレ・記載漏れを機械検証 (通るまで完成にしない)。標準: [`docs/design/flow-diagram-standard.md`](docs/design/flow-diagram-standard.md) / 根拠 [`ADR-0015`](docs/adr/0015-business-flow-diagram-standard.md)
 - **安全原則 (ADR 運用)**: ファイル名 `NNNN-kebab-case.md` (欠番なし)、**採択済みは書き換えず新規 ADR で Supersede**、採択日 ISO 形式。**更新順**: ADR (なぜ) → architecture (どう動くか) → コード (drift 注意)
 
 ## ドメイン固有スキル (詳細は各 SKILL.md / docs)
