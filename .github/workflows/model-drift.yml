@@ -4,11 +4,15 @@ name: model-drift
 #
 # 検出したいもの:
 #   1. 退役済みモデル ID が skills/ scripts/ CLAUDE.md 等に残っている
-#      (deepseek-reasoner の退役に 3 週間気づけなかった事故の再発防止)
+#      (deepseek-reasoner の退役に 3 週間気づけなかった事故の再発防止)  # model-doctor:allow
 #   2. config/models.yml に未登録のモデル ID が使われている
 #
-# API キーは使わない (静的検査のみ)。実在確認 (--probe) はローカルで
-# `bash scripts/model-doctor.sh --probe` を回す。
+# ⚠️ **drift だけでは元の事故 (上流が黙って消える) は検知できない**。
+#    台帳に active として残っていれば drift は通るため、上流実在確認 (--probe) が要る。
+#    probe は API キーが要るので次の 2 経路で回す:
+#      (a) 下の probe job — 週次 schedule。Secrets が設定されていれば実行
+#      (b) /status skill — キーが実在するローカルマシンで、7 日以上経過していたら実行
+#    (b) が主で (a) は保険。ADR-0017 のレッドチーム指摘 Critical-1 への対応。
 on:
   pull_request:
     paths:
@@ -21,6 +25,9 @@ on:
       - ".github/workflows/model-drift.yml"
   push:
     branches: [main]
+  schedule:
+    - cron: "17 0 * * 1"   # 毎週月曜 (上流実在確認)
+  workflow_dispatch:
 
 jobs:
   drift:
@@ -31,3 +38,36 @@ jobs:
         run: python3 -m pip install --quiet pyyaml
       - name: モデル ID の drift 検査
         run: bash scripts/model-doctor.sh --drift
+
+  # 上流実在確認 (週次)。キーが無い環境では明示的に skip する。
+  probe:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet pyyaml
+      - name: Secrets の有無を判定
+        id: keys
+        env:
+          ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC" ]; then echo "have=true" >> "$GITHUB_OUTPUT"
+          else echo "have=false" >> "$GITHUB_OUTPUT"; fi
+      - name: 上流実在確認
+        if: steps.keys.outputs.have == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          umask 077
+          [ -n "${ANTHROPIC_API_KEY:-}" ] && printf '%s' "$ANTHROPIC_API_KEY" > ~/.anthropic_token
+          [ -n "${DEEPSEEK_API_KEY:-}" ]  && printf '%s' "$DEEPSEEK_API_KEY"  > ~/.deepseek_token
+          [ -n "${GEMINI_API_KEY:-}" ]    && printf '%s' "$GEMINI_API_KEY"    > ~/.gemini_token
+          bash scripts/model-doctor.sh --probe
+      - name: Secrets 未設定の告知
+        if: steps.keys.outputs.have != 'true'
+        run: |
+          echo "::warning::API キーの Secrets が未設定のため上流実在確認を skip しました。"
+          echo "::warning::この経路は保険です。主経路である /status のローカル probe が回っているか確認してください。"

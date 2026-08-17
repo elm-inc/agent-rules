@@ -102,7 +102,7 @@ PAYLOAD=$(jq -n \
     thinking: {type: "enabled"},
     reasoning_effort: "high",
     messages: [{role: "user", content: $content}],
-    max_tokens: 8192
+    max_tokens: 32000
   }')
 
 RESPONSE=$(curl -sf --max-time 600 https://api.deepseek.com/v1/chat/completions \
@@ -122,6 +122,11 @@ echo "$RESPONSE" | jq -r '.usage | "  入力 \(.prompt_tokens) / 出力 \(.compl
 ```
 
 > `thinking` と `reasoning_effort` は **両方**必要。省くと非思考モードで走り、レッドチームとしての深さが出ない。`reasoning_effort` は `low` / `high` / `max` を取る。
+
+> ⚠️ **`max_tokens` は思考 + 本文の合計上限**。`reasoning_effort: high` で大きめの入力を投げると **思考だけで使い切って本文が空**になる (2026-08-17 実測: 入力 9.5K tok に `max_tokens: 8192` で `reasoning_tokens=8192` / content 空)。Gemini の thinking 枯渇と同型の罠。
+> - **`max_tokens: 32000` を下限**とする
+> - 応答が空だったら `completion_tokens_details.reasoning_tokens` を見る。`max_tokens` と一致していたら枯渇なので増やすか `reasoning_effort` を下げる
+> - 上のスクリプトは使用量を必ず表示する。空応答を黙って「指摘なし」と解釈しないこと
 
 ### 5. 結果表示
 

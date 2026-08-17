@@ -62,6 +62,26 @@ MEMORY_DIR=$HOME/.claude/projects/-home-elmo-repos-github-com-elm-inc/memory
   ```
 - 各ファイルの frontmatter `description` と `type` を抽出
 
+### 3-b. モデル台帳の鮮度チェック (ADR-0017)
+
+**ベンダーは黙ってモデルを消す**。台帳との drift は CI が見るが、**上流から消えたことは実際に問い合わせないと分からない**
+(実際に `deepseek-reasoner` の退役に 3 週間気づけず `/deepseek-redteam` が壊れたままだった)。 <!-- model-doctor:allow -->
+API キーが実在するのはこのローカルマシンなので、**probe の主経路は `/status`** とする。
+
+7 日以上 probe していなければ実行する:
+
+```bash
+AGENT_RULES=~/repos/github.com/elm-inc/agent-rules
+STAMP=~/.cache/model-doctor-last-probe
+if [ ! -f "$STAMP" ] || [ "$(( ($(date +%s) - $(stat -c %Y "$STAMP")) / 86400 ))" -ge 7 ]; then
+  bash "$AGENT_RULES/scripts/model-doctor.sh" --probe && touch "$STAMP"
+fi
+```
+
+- 失敗 (退役検出) したら **`## ⚠ 注意` セクションの先頭に出す**。壊れたスキルを黙って使わせない
+- 退役予定が 90 日以内のものも同様に注意へ
+- キー未設定等で probe が成立しなかった場合も注意に出す (黙って skip しない)
+
 ### 4. 出力フォーマット
 
 以下の markdown を出力する (セクションに情報がなければ省略):
@@ -98,6 +118,7 @@ MEMORY_DIR=$HOME/.claude/projects/-home-elmo-repos-github-com-elm-inc/memory
 - 直近 7 日以内のものを優先、古いものは件数のみ
 
 ## ⚠ 注意
+- (モデル退役・退役予定があれば **最優先で** ここに出す)
 - (長く残っている uncommitted 変更、レビュー未対応 PR 等があれば警告)
 ```
 
