@@ -1,6 +1,6 @@
 ---
 name: local-review
-description: ローカル LLM (Qwen2.5-Coder-32B / vLLM) で差分の0次レビューを行う。コミット直前の雑なミス検出に使う。/codex-review より前段で安価・高速。秒オーダーで終わる。vLLM は普段停止しておりスキルが自動起動するため「停止中」でも実行可 (停止=利用不可ではない)
+description: ローカル LLM (Qwen3-Coder-30B-A3B / vLLM) で差分の0次レビューを行う。コミット直前の雑なミス検出に使う。/codex-review より前段で安価・高速。秒オーダーで終わる。vLLM は普段停止しておりスキルが自動起動するため「停止中」でも実行可 (停止=利用不可ではない)
 argument-hint: "[対象指定（例: --base main, --uncommitted, --commit <sha>） + 追加観点]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh*)
@@ -8,7 +8,7 @@ allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(bash ~/repos
 
 # ローカル LLM による 0 次コードレビュー
 
-Qwen2.5-Coder-32B (vLLM) で差分を高速レビューする。`/codex-review` の前段に挟み、明らかなバグ・型違反・未処理エラーを早期に検出する。
+Qwen3-Coder-30B-A3B (MoE / AWQ 4bit, vLLM) で差分を高速レビューする。`/codex-review` の前段に挟み、明らかなバグ・型違反・未処理エラーを早期に検出する。
 
 ## 前提
 
@@ -99,11 +99,11 @@ git show "$SHA"
 
 ### 4. vLLM 呼び出し
 
-> **Phase 5 改善**: vLLM の `max_model_len` から動的に `max_tokens` を計算する (Phase 2 で 4096 に縮小したため、ハードコード 4096 だと OOM/overflow)。
+> vLLM の `max_model_len` から動的に `max_tokens` を計算する (モデル載せ替えで context 上限は変わるため、ハードコードしない)。ADR-0017 で 4096 → 32768 に拡大済み。
 
 ```bash
-# context 上限を取得 (Phase 2 設定で 4096、Phase 5 以降で 8192 想定)
-MAX_LEN=$(curl -s "$BASE_URL/models" | jq -r '.data[0].max_model_len // 4096')
+# context 上限を取得 (現行 Qwen3-Coder-30B-A3B AWQ4bit は 32768)
+MAX_LEN=$(curl -s "$BASE_URL/models" | jq -r '.data[0].max_model_len // 32768')
 INPUT_TOK=$(( ${#PROMPT} / 4 ))
 MAX_OUT=$(( MAX_LEN - INPUT_TOK - 100 ))
 [ "$MAX_OUT" -lt 500 ] && MAX_OUT=500

@@ -7,7 +7,7 @@
 # Phase 2-3 のトークン取得手順は docs/setup/notes/phase{2,3}-*.md 参照。
 
 # --- ローカル LLM (vLLM) ---
-# 常駐: Qwen-Coder-32B FP8 (ADR-0002 採択でロード戦略 A 案 = swap 方式)
+# 主力: Qwen3-Coder-30B-A3B AWQ4bit (ADR-0017)。既定はオンデマンド起動 (ADR-0005)
 export LOCAL_LLM_BASE_URL="http://localhost:8000/v1"
 export LOCAL_LLM_MODEL="qwen-coder"
 
@@ -15,8 +15,7 @@ export LOCAL_LLM_MODEL="qwen-coder"
 # scripts/vllm-swap-to.sh で起動・restore する
 export LOCAL_LLM_SWAP_BASE_URL="http://localhost:8001/v1"
 # モデル名 (served-model-name) は swap-to で起動した値:
-#   distill   → DeepSeek-R1-Distill-Qwen-14B online FP8
-#   coder-14b → Qwen2.5-Coder-14B-Instruct AWQ INT4
+#   (swap 候補は用途が無くなったため ADR-0017 で整理。必要になったら台帳に追加する)
 
 # HF cache の統一先 (Phase 7 で elmo 所有領域に移行予定)
 export HF_HUB_CACHE="$HOME/.cache/huggingface/hub"

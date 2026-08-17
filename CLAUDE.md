@@ -6,20 +6,32 @@
 
 ## AI 開発ワークフロー (多層・多モデル)
 
-実装は **Claude Opus 4.8** (司令塔・セッションモデル)、レビュー・検証・テスト生成は複数 LLM の役割分担 + 機械検証で多層化 (Anthropic/OpenAI 系に偏らせず Gemini・DeepSeek・ローカル LLM を混ぜ groupthink 回避)。Codex/DeepSeek/Gemini/Qwen はスキル経由で呼ぶ「ツール」で司令塔にはならない。
-役割分担・オーケストレーション・コスト見通しの全体像: [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) / 根拠: [`docs/adr/0001`](docs/adr/0001-multi-llm-development-workflow.md), [`docs/adr/0006`](docs/adr/0006-orchestration-methods.md)。
+実装は **Claude Opus 5** (司令塔・セッションモデル)、レビュー・検証・テスト生成は多層化する。Codex/DeepSeek/Gemini/Qwen はスキル経由で呼ぶ「ツール」で司令塔にはならない。
+全体像: [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) / 根拠: [`docs/adr/0017`](docs/adr/0017-ai-workflow-model-refresh-and-review-layers.md) (ADR-0001 を Supersede), [`docs/adr/0006`](docs/adr/0006-orchestration-methods.md)。
 
-| ロール | スキル |
+### レビューの 4 層 (層ごとに「何のために置くか」が違う)
+
+| 層 | 目的 | 手段 | いつ |
+|---|---|---|---|
+| **床** | 無限に回す・機密 OK・0 円 | `/local-review` + pre-commit | 常時 |
+| **多様性** | groupthink 回避 | **異ベンダーを 1 つだけ**: 設計 → `/deepseek-redteam` / 横断 → `/gemini-review` / 実装視点 → `/codex-review` | 差分の性質で選ぶ |
+| **深さ** | 指摘を敵対的に検証して絞る | `/code-review` (巨大タスクは Workflow ファンアウト) | 品質を上げたいとき |
+| **最後の砦** | 下流への波及が大きい変更 | `/fable-review` | 高リスク変更のみ |
+
+> **安全原則 (多様性はハーネスでは買えない)**: `/code-review` 系の多エージェント検証は**全部 Claude なので groupthink を原理的に解けない**。逆に自前スキルは敵対的検証ループを持たない。**多様性は自前スキル、深さはハーネス**と役割を分け、**異ベンダーは常時 1 つまで** (2 つ回すコストに見合う追加検出は無い)。
+
+| その他のロール | スキル |
 |---|---|
-| 高難度実装・設計 / 最終レビュー (Fable 5 subagent) | `/fable-task` / `/fable-review` |
-| 0 次レビュー (Qwen) / セカンドオピニオン (Codex) | `/local-review` / `/codex-review`・`/codex-task`・`/codex-audit` |
-| 設計レッドチーム (DeepSeek) / リポ横断 (Gemini) | `/deepseek-redteam` / `/gemini-review` |
+| 高難度実装・設計 (Fable 5 subagent) | `/fable-task` |
+| セカンドオピニオン (Codex) | `/codex-review`・`/codex-task`・`/codex-audit` |
 | テスト観点・実装 / データ / 健全性 | `/test-generate` / `/test-data` / `/mutation-check` |
 | 探索・調査の床 (Haiku subagent) | `explorer` / `researcher` (`~/.claude/agents/`) |
 
-### モデル使い分け (Opus 4.8 / Fable 5)
+### モデル使い分け (Opus 5 / Fable 5)
 
-常用は **Opus 4.8**。**Fable 5** は「**手戻り・正しさ・品質が下流に大きく波及するか**」を物差しに、価値が高い局面で subagent 委譲する (委譲前に一言宣言し「なぜ Opus では不足か」を 1 行添える)。局所的・機械的・低リスクなタスクは Opus のまま。使いどころの条件表は各 SKILL.md (`/fable-task` = 設計/難実装/調査/品質引き上げ、`/fable-review` = セキュリティ・課金・公開 API・並行処理などの高リスク変更に限定)。セッション全体を Fable にするのは単発・完全自律の超高難度ミッションのみ (`/model fable`)。
+常用は **Opus 5**。**Fable 5** は「**手戻り・正しさ・品質が下流に大きく波及するか**」を物差しに、価値が高い局面で subagent 委譲する (委譲前に一言宣言し「なぜ Opus では不足か」を 1 行添える)。局所的・機械的・低リスクなタスクは Opus のまま。使いどころの条件表は各 SKILL.md (`/fable-task` = 設計/難実装/調査/品質引き上げ、`/fable-review` = セキュリティ・課金・公開 API・並行処理などの高リスク変更に限定)。セッション全体を Fable にするのは単発・完全自律の超高難度ミッションのみ (`/model fable`)。**Opus 5 は 4.8 と同価格で能力が上がったため、Fable に投げる閾値は以前より高く取る** (まず Opus 5 を effort 高めで試す)。
+
+> 🔒 **安全原則 (モデル ID は台帳が単一ソース)**: スキル/スクリプトにモデル ID を直書きしない。[`config/models.yml`](config/models.yml) を先に更新し `bash scripts/model-doctor.sh` を通す。**ベンダーは黙ってモデルを消す** — `deepseek-reasoner` の退役に 3 週間気づけず `/deepseek-redteam` が壊れたままだった事故の再発防止 (ADR-0017)。CI (`model-drift.yml`) が drift を落とす。 <!-- model-doctor:allow (事故の説明として言及) -->
 
 > 💰 **安全原則 (Fable コスト規律・従量課金 2026-07-20〜)**: Fable 5 は Max では**週次上限の 50% まで included (恒久)、超過分のみ実費** ($10/$50 per MTok = Opus の 2 倍)。included 枠があっても「余っているから念のため Fable」は不成立 (Opus 等と週次上限を食い合う)。**1 タスク 1 委譲 (往復＝追加実費)・委譲前宣言・statusline 監視**を徹底。当月 $ は `scripts/fable-usage.sh` が集計し statusline に常時表示 (included 未考慮の上限見積り・実費の正は Console。予算 $100/月 = 超過分への予算)。超過後も止めないが起動前に要否を都度確認 (人手ゲート)。根拠: [`docs/adr/0010`](docs/adr/0010-fable-metered-billing-controls.md) (07-23 改訂)
 
@@ -32,15 +44,19 @@
 ### コミット時のフロー (推奨)
 
 ```
-[設計] docs/design/foo.md 起草 (受け入れ基準 + 検証手段付き) → /deepseek-redteam → (任意) /codex-audit
-[実装] Opus 4.8 (高難度は /fable-task で Fable 5 委譲)
-[コミット前] /local-review → pre-commit → (必要時) /test-generate → /codex-review
-             → (10+ファイル/ADR drift 疑い) /gemini-review → (高リスク変更のみ) /fable-review
+[設計] docs/design/foo.md 起草 (受け入れ基準 + 検証手段付き) → /deepseek-redteam
+[実装] Opus 5 (高難度は /fable-task で Fable 5 委譲)
+[コミット前] 床:      /local-review → pre-commit → (必要時) /test-generate
+             多様性: 異ベンダーを 1 つ選ぶ
+                     設計を疑う→/deepseek-redteam / 10+ファイル・ADR drift→/gemini-review
+                     実装視点→/codex-review
+             深さ:   /code-review (敵対的検証)
+             砦:     /fable-review (高リスク変更のみ)
 [実行検証] /verify, /run, E2E (UI はスクショ)
 ```
-軽微な変更では `/local-review` + pre-commit のみで十分。
+軽微な変更では **床のみ** (`/local-review` + pre-commit) で十分。多様性と深さは毎回回さない。
 
-> **安全原則 (vLLM は停止が既定)**: ローカル LLM (vLLM) は普段停止しているのが正常 (オンデマンド起動)。`/local-review`・`/test-generate`・`/test-data` は `ensure-vllm.sh` で自動起動する (初回 1-2 分・アイドル 15 分で自動停止)。**「vLLM が停止しているのでローカルレビューを中止」は誤り** — 停止は既定状態であって利用不可ではない。自前で `:8000` を叩いて落ちていても中止せずスキル経由で起動して続行。本当に起動不可 (GPU 専有等) のときのみ `/codex-review` に切替。根拠: [`docs/adr/0005`](docs/adr/0005-on-demand-local-llm.md) / セットアップ: [`docs/setup/local-llm.md`](docs/setup/local-llm.md)
+> **安全原則 (vLLM は停止が既定)**: ローカル LLM (vLLM) は普段停止しているのが正常 (オンデマンド起動)。`/local-review`・`/test-generate`・`/test-data` は `ensure-vllm.sh` で自動起動する (初回 1-2 分・アイドル 15 分で自動停止。現行モデル: Qwen3-Coder-30B-A3B AWQ4bit)。**「vLLM が停止しているのでローカルレビューを中止」は誤り** — 停止は既定状態であって利用不可ではない。自前で `:8000` を叩いて落ちていても中止せずスキル経由で起動して続行。本当に起動不可 (GPU 専有等) のときのみ `/codex-review` に切替。根拠: [`docs/adr/0005`](docs/adr/0005-on-demand-local-llm.md) / セットアップ: [`docs/setup/local-llm.md`](docs/setup/local-llm.md)
 
 ### Claude Code 開発プラクティス (公式準拠)
 

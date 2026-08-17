@@ -1,0 +1,33 @@
+name: model-drift
+
+# モデル ID の drift を PR で機械検証する (ADR-0017)。
+#
+# 検出したいもの:
+#   1. 退役済みモデル ID が skills/ scripts/ CLAUDE.md 等に残っている
+#      (deepseek-reasoner の退役に 3 週間気づけなかった事故の再発防止)
+#   2. config/models.yml に未登録のモデル ID が使われている
+#
+# API キーは使わない (静的検査のみ)。実在確認 (--probe) はローカルで
+# `bash scripts/model-doctor.sh --probe` を回す。
+on:
+  pull_request:
+    paths:
+      - "config/models.yml"
+      - "skills/**"
+      - "scripts/**"
+      - "agents/**"
+      - "templates/**"
+      - "CLAUDE.md"
+      - ".github/workflows/model-drift.yml"
+  push:
+    branches: [main]
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet pyyaml
+      - name: モデル ID の drift 検査
+        run: bash scripts/model-doctor.sh --drift

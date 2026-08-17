@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# DeepSeek-R1 (deepseek-reasoner) API 動作確認
+# DeepSeek V4-Pro API 動作確認 (思考モード)
+# モデル ID の単一ソースは config/models.yml (ADR-0017)
 # Linear: AGENT-3
 set -euo pipefail
 
@@ -15,13 +16,15 @@ if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
   fi
 fi
 
-MODEL="${DEEPSEEK_MODEL:-deepseek-reasoner}"
+MODEL="${DEEPSEEK_MODEL:-deepseek-v4-pro}"
 PROMPT="${1:-1から10までの素数を列挙し、なぜそれが素数なのか1行で説明してください。}"
 
 echo "=== DeepSeek API 動作確認 ($MODEL) ==="
 
 PAYLOAD=$(jq -n --arg p "$PROMPT" --arg m "$MODEL" '{
   model: $m,
+  thinking: {type: "enabled"},
+  reasoning_effort: "high",
   messages: [{role: "user", content: $p}],
   max_tokens: 1024
 }')
@@ -34,7 +37,7 @@ RESPONSE=$(curl -sf https://api.deepseek.com/v1/chat/completions \
 END=$(date +%s.%N)
 ELAPSED=$(echo "$END - $START" | bc)
 
-# 思考過程 (R1 特有)
+# 思考過程 (思考モード有効時に reasoning_content へ入る)
 REASONING=$(echo "$RESPONSE" | jq -r '.choices[0].message.reasoning_content // empty')
 if [ -n "$REASONING" ]; then
   echo ""

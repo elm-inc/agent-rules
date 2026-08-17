@@ -1,4 +1,4 @@
-# vLLM Qwen-Coder-32B FP8 常駐 (ADR-0001 + Phase 7 ロード戦略 A 案)
+# vLLM Qwen3-Coder-30B-A3B AWQ4bit 常駐 (ADR-0017。既定はオンデマンド起動 = ADR-0005)
 # AGENT-14 で確立。docker run --restart unless-stopped からの置換え。
 #
 # install:
@@ -23,7 +23,7 @@
 # 詳細: docs/setup/local-llm.md の "systemd unit 化" セクション
 
 [Unit]
-Description=vLLM Qwen2.5-Coder-32B FP8 (常駐モデル, ADR-0001/0002)
+Description=vLLM Qwen3-Coder-30B-A3B AWQ4bit (常駐モデル, ADR-0017)
 Documentation=https://github.com/elm-inc/agent-rules/blob/main/docs/setup/local-llm.md
 Requires=docker.service
 After=docker.service network-online.target
@@ -62,10 +62,10 @@ ExecStart=/usr/bin/docker run --rm \
   -e HF_HUB_ENABLE_HF_TRANSFER=1 \
   -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
   vllm/vllm-openai:latest \
-  --model RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic \
-  --max-model-len 4096 \
+  --model cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit \
+  --revision 4bd30395b72ea6045edd04806c4fea448d4467b3 \
+  --max-model-len 32768 \
   --gpu-memory-utilization 0.88 \
-  --cpu-offload-gb 6 \
   --enforce-eager \
   --served-model-name qwen-coder
 

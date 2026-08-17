@@ -85,10 +85,10 @@ docker run -d \
   -e HF_HUB_ENABLE_HF_TRANSFER=1 \
   -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
   vllm/vllm-openai:latest \
-  --model RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic \
-  --max-model-len 4096 \
+  --model cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit \
+  --revision 4bd30395b72ea6045edd04806c4fea448d4467b3 \
+  --max-model-len 32768 \
   --gpu-memory-utilization 0.88 \
-  --cpu-offload-gb 6 \
   --enforce-eager \
   --served-model-name qwen-coder > /dev/null
 

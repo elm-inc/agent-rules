@@ -1,12 +1,15 @@
 ---
 name: test-generate
-description: 対象の関数・モジュールに対するテストケース列挙とテスト実装を生成する。ローカル LLM (Qwen2.5-Coder-32B) を主、DeepSeek-R1 を property-based test の不変条件発想に使う。mutation testing の生存変異を殺すテスト追加モードもあり
+description: 対象の関数・モジュールに対するテストケース列挙とテスト実装を生成する。ローカル LLM (Qwen3-Coder-30B-A3B) を主、DeepSeek V4-Pro を property-based test の不変条件発想に使う。mutation testing の生存変異を殺すテスト追加モードもあり
 argument-hint: <対象ファイルまたは関数> [--property] [--mutants <生存変異リスト>]
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Read Write Edit
 ---
 
-# テストケース・実装生成
+# テストケース・実装生成 (旧版)
+
+> **これは ADR-0002 以前の挙動を残した参照用ファイル**。現行は `SKILL.md`。
+> モデル ID の単一ソースは [`config/models.yml`](../../config/models.yml) (ADR-0017)。
 
 対象コードに対し、**正常系・境界・異常系を列挙** → **テスト実装を生成** する。プロパティテスト不変条件の発想やミューテーションテスト対策モードも持つ。
 
@@ -14,8 +17,8 @@ allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash
 
 | モード | LLM | 用途 |
 |---|---|---|
-| 列挙 + 実装 (デフォルト) | Qwen2.5-Coder-32B (ローカル) | 通常のテスト生成 |
-| `--property` | DeepSeek-R1 (発想) + Qwen (実装) | プロパティテスト不変条件 |
+| 列挙 + 実装 (デフォルト) | Qwen3-Coder-30B-A3B (ローカル) | 通常のテスト生成 |
+| `--property` | DeepSeek V4-Pro (発想) + Qwen (実装) | プロパティテスト不変条件 |
 | `--mutants` | Qwen | 生存ミュータントを殺すテスト追加 |
 
 ## 前提
@@ -93,7 +96,7 @@ find "$TEST_DIR" -type f | head -5 | xargs -I {} sh -c 'echo "## {}"; cat "{}"'
 
 ### 3-B. `--property` モード: 不変条件発想
 
-DeepSeek-R1 でプロパティテストの不変条件を発想:
+DeepSeek V4-Pro でプロパティテストの不変条件を発想:
 
 ```
 あなたはプロパティベーステストに精通したエンジニアです。
@@ -206,11 +209,11 @@ curl -sf "${LOCAL_LLM_BASE_URL:-http://localhost:8000/v1}/chat/completions" \
   | jq -r '.choices[0].message.content'
 ```
 
-### DeepSeek-R1
+### DeepSeek V4-Pro
 
 ```bash
 PAYLOAD=$(jq -n --arg content "$PROMPT" \
-  '{model:"deepseek-reasoner", messages:[{role:"user", content:$content}], max_tokens:8192}')
+  '{model:"deepseek-v4-pro", thinking:{type:"enabled"}, reasoning_effort:"high", messages:[{role:"user", content:$content}], max_tokens:8192}')
 
 curl -sf https://api.deepseek.com/v1/chat/completions \
   -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
