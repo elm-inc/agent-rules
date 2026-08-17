@@ -13,12 +13,17 @@
 
 | 層 | 目的 | 手段 | いつ |
 |---|---|---|---|
-| **床** | 無限に回す・機密 OK・0 円 | `/local-review` + pre-commit | 常時 |
+| **床 (機械)** | 決定論的に取れるものを 0 円で取る | pre-commit (ruff/mypy/semgrep) | **常時・必須** |
+| **床 (LLM)** | 意図と実装の食い違いを独立視点で見る | `/local-review` | **機密案件は必須** / 公開リポは任意 |
 | **多様性** | groupthink 回避 | **異ベンダーを 1 つだけ**: 設計 → `/deepseek-redteam` / 横断 → `/gemini-review` / 実装視点 → `/codex-review` | 差分の性質で選ぶ |
 | **深さ** | 指摘を敵対的に検証して絞る | `/code-review` (巨大タスクは Workflow ファンアウト) | 品質を上げたいとき |
 | **最後の砦** | 下流への波及が大きい変更 | `/fable-review` | 高リスク変更のみ |
 
 **高リスク変更 (セキュリティ・課金・データ破壊・公開 API・並行処理) では「多様性」層を省略しない。** `/code-review` も `/fable-review` も Claude 系なので、砦だけ通すと異ベンダーの独立視点がゼロになる。
+
+> **床は機械と LLM の 2 本立てで、どちらも単独では穴が残る** (2026-08-17 実測: [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) §4-1)。linter は「ファイル未 close」を数ミリ秒で取るが**意味的バグは全ルールで 0 件**。LLM は off-by-one・lock 範囲・変数同士の `is` を取るが「未 close」は 6/6 見逃した。**和集合で初めて全件**になる。
+>
+> **`/local-review` の起動条件**: 機密案件 (cloud 送信不可) では**唯一の LLM 選択肢なので必須**。公開リポで異ベンダーを 1 つ回すなら**独立視点として重複するので省略可**。レビュー層の真のコストは計算資源ではなく**読み手の注意**で、0 円でも冗長な指摘は負債になる。
 
 > **安全原則 (多様性はハーネスでは買えない)**: `/code-review` 系の多エージェント検証は**全部 Claude なので groupthink を原理的に解けない**。逆に自前スキルは敵対的検証ループを持たない。**多様性は自前スキル、深さはハーネス**と役割を分け、**異ベンダーは常時 1 つまで** (2 つ回すコストに見合う追加検出は無い)。
 
@@ -48,7 +53,9 @@
 ```
 [設計] docs/design/foo.md 起草 (受け入れ基準 + 検証手段付き) → /deepseek-redteam
 [実装] Opus 5 (高難度は /fable-task で Fable 5 委譲)
-[コミット前] 床:      /local-review → pre-commit → (必要時) /test-generate
+[コミット前] 床(機械): pre-commit (ruff/mypy/semgrep)          ← 常時・必須
+             床(LLM):  /local-review — 機密案件は必須 / 公開リポは任意
+                       (必要時) /test-generate
              多様性: 異ベンダーを 1 つ選ぶ
                      設計を疑う→/deepseek-redteam / 10+ファイル・ADR drift→/gemini-review
                      実装視点→/codex-review
@@ -56,7 +63,7 @@
              砦:     /fable-review (高リスク変更のみ)
 [実行検証] /verify, /run, E2E (UI はスクショ)
 ```
-軽微な変更では **床のみ** (`/local-review` + pre-commit) で十分。多様性と深さは毎回回さない。
+軽微な変更では **床のみ**で十分。機械層 (pre-commit) は常時必須、LLM 層は文脈で判断する。多様性と深さは毎回回さない。
 
 > **安全原則 (vLLM は停止が既定)**: ローカル LLM (vLLM) は普段停止しているのが正常 (オンデマンド起動)。`/local-review`・`/test-generate`・`/test-data` は `ensure-vllm.sh` で自動起動する (初回 1-2 分・アイドル 15 分で自動停止。現行モデル: Qwen3-Coder-30B-A3B AWQ4bit)。**「vLLM が停止しているのでローカルレビューを中止」は誤り** — 停止は既定状態であって利用不可ではない。自前で `:8000` を叩いて落ちていても中止せずスキル経由で起動して続行。本当に起動不可 (GPU 専有等) のときのみ `/codex-review` に切替。根拠: [`docs/adr/0005`](docs/adr/0005-on-demand-local-llm.md) / セットアップ: [`docs/setup/local-llm.md`](docs/setup/local-llm.md)
 
