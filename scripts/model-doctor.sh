@@ -12,10 +12,16 @@
 #   --probe  (API キー必要 / ローカル向け)
 #       active の各 ID がベンダー API に実在するか。退役予定日が近いものを警告する。
 #
+#   --strict (--probe と併用 / CI 向け)
+#       ベンダーを 1 つでも skip したら fail にする。
+#       「Anthropic のキーだけあって DeepSeek/Gemini は未確認」でも成功扱いになると、
+#       退役検知が働かないまま green になる (実際 R1 は DeepSeek 側で起きた)。
+#
 # Usage:
 #   bash scripts/model-doctor.sh            # --drift + --probe (キーがある分だけ)
 #   bash scripts/model-doctor.sh --drift    # 静的検査のみ (CI)
 #   bash scripts/model-doctor.sh --probe    # 疎通確認のみ
+#   bash scripts/model-doctor.sh --probe --strict   # 全ベンダー到達必須 (CI)
 #
 # 終了コード: 0=健全, 1=要対応 (drift or 実在しない ID)
 
@@ -27,12 +33,19 @@ LEDGER="${REPO_ROOT}/config/models.yml"
 RED=$'\033[31m'; YEL=$'\033[33m'; GRN=$'\033[32m'; DIM=$'\033[2m'; RST=$'\033[0m'
 ok()   { echo "  ${GRN}✓${RST} $*"; PROBED=$(( ${PROBED:-0} + 1 )); }
 warn() { echo "  ${YEL}!${RST} $*"; }
+# ベンダーを skip したら記録する (--strict で fail に変える)
+skip_vendor() {
+  SKIPPED="${SKIPPED:-} $1"
+  if [ "${STRICT:-0}" = "1" ]; then fail "$2 (--strict のため失敗扱い)"; else warn "$2"; fi
+}
 fail() { echo "  ${RED}✗${RST} $*"; RC=1; }
 RC=0
 
 [ -f "$LEDGER" ] || { echo "${RED}ERROR${RST}: 台帳が見つかりません: $LEDGER"; exit 1; }
 
 MODE="${1:-all}"
+STRICT=0
+for a in "$@"; do [ "$a" = "--strict" ] && STRICT=1; done
 
 # --- 台帳の読み出し (PyYAML) ---------------------------------------------
 ledger() { python3 -c "
@@ -97,6 +110,22 @@ run_drift() {
   done <<<"$found"
 
   [ "$unknown" -eq 0 ] && ok "検出した ID はすべて台帳の active に登録済み ($(wc -l <<<"$found") 件)"
+
+  # 走査対象と CI trigger の整合。片方にしか無いファイルは
+  # 「走査対象なのに CI が起動しない」穴になる (codex-review 指摘)。
+  local wf="${REPO_ROOT}/.github/workflows/model-drift.yml"
+  if [ -f "$wf" ]; then
+    local missing=""
+    for t in "${targets[@]}"; do
+      # ディレクトリは "t/**"、ファイルはそのまま。.github は ".github/**" で覆う
+      grep -qE "\"(${t}(/\*\*)?)\"" "$wf" || missing="$missing $t"
+    done
+    if [ -n "$missing" ]; then
+      fail "CI trigger (model-drift.yml の paths) に走査対象が含まれていません:${missing}"
+    else
+      ok "走査対象と CI trigger が一致 (${#targets[@]} 件)"
+    fi
+  fi
 }
 
 # --- 2. 疎通確認 (ベンダー API に実在するか) ------------------------------
@@ -116,7 +145,7 @@ probe_vendor() {  # $1=vendor  $2..=期待する ID 群
   jqids="$(ledger "print(d['probes']['$vendor']['jq_ids'])")"
 
   if [ -z "$token" ] && [ "$auth" != "bearer_optional" ]; then
-    warn "${vendor}: トークン未設定 → skip"
+    skip_vendor "$vendor" "${vendor}: トークン未設定 → 未確認"
     return
   fi
 
@@ -137,11 +166,11 @@ probe_vendor() {  # $1=vendor  $2..=期待する ID 群
     bearer)    resp="$(curl -sf -m 25 "$url" -H "Authorization: Bearer $token" 2>/dev/null)" ;;
     x-api-key) resp="$(curl -sf -m 25 "$url" -H "x-api-key: $token" ${extra:+-H "$extra"} 2>/dev/null)" ;;
     query_key) resp="$(curl -sf -m 25 "${url}?key=${token}" 2>/dev/null)" ;;
-    *)         warn "${vendor}: 未知の auth 方式 '${auth}' → skip"; return ;;
+    *)         skip_vendor "$vendor" "${vendor}: 未知の auth 方式 '${auth}' → 未確認"; return ;;
   esac
 
   if [ -z "$resp" ]; then
-    warn "${vendor}: モデル一覧を取得できません (キー無効 or ネットワーク) → skip"
+    skip_vendor "$vendor" "${vendor}: モデル一覧を取得できません (キー無効 or ネットワーク) → 未確認"
     return
   fi
 
@@ -159,8 +188,9 @@ probe_vendor() {  # $1=vendor  $2..=期待する ID 群
 
 run_probe() {
   echo
-  echo "== 疎通確認 (台帳の active が上流に実在するか) =="
+  echo "== 疎通確認 (台帳の active が上流に実在するか)$([ "${STRICT:-0}" = 1 ] && echo ' [strict]') =="
   PROBED=0
+  SKIPPED=""
   local vendors
   vendors="$(ledger "print('\n'.join(sorted({m['vendor'] for m in d['active'] if m.get('id')})))")"
   while IFS= read -r v; do
@@ -170,9 +200,13 @@ run_probe() {
     probe_vendor "$v" "${ids[@]}"
   done <<<"$vendors"
 
-  # 1 つも実際に確認できていないなら「健全」と言ってはいけない
+  # 1 つも確認できていないなら「健全」と言ってはいけない
   if [ "${PROBED:-0}" -eq 0 ]; then
     fail "どのベンダーにも到達できませんでした (キー未設定 or ネットワーク)。疎通確認は成立していません"
+  elif [ -n "${SKIPPED:-}" ]; then
+    # 一部だけ確認できた状態を「健全」と呼ばない。
+    # 退役は未確認のベンダー側で起きる (R1 は DeepSeek で起きた)。
+    warn "未確認のベンダー:${SKIPPED} — この範囲の退役は検知できていません"
   fi
 
   # 退役予定日が 90 日以内のものを警告
@@ -198,6 +232,7 @@ echo
 case "$MODE" in
   --drift) run_drift ;;
   --probe) run_probe ;;
+  --strict) run_drift; run_probe ;;
   all|--all) run_drift; run_probe ;;
   *) echo "usage: $0 [--drift|--probe|--all]"; exit 2 ;;
 esac

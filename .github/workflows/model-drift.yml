@@ -15,14 +15,20 @@ name: model-drift
 #    (b) が主で (a) は保険。ADR-0017 のレッドチーム指摘 Critical-1 への対応。
 on:
   pull_request:
+    # ⚠️ この paths は model-doctor.sh の走査対象 (targets 配列) と一致させること。
+    #    片方にしか無いファイルは「走査対象なのに CI が起動しない」穴になる。
     paths:
       - "config/models.yml"
       - "skills/**"
       - "scripts/**"
       - "agents/**"
       - "templates/**"
+      - "plugins/**"
+      - "prompts/**"
       - "CLAUDE.md"
-      - ".github/workflows/model-drift.yml"
+      - "RULES.md"
+      - "AGENTS.md"
+      - ".github/**"
   push:
     branches: [main]
   schedule:
@@ -47,14 +53,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install PyYAML
         run: python3 -m pip install --quiet pyyaml
+      # どれか 1 つでも設定されていれば probe を回す。
+      # ANTHROPIC だけで判定すると、DeepSeek/Gemini の secret があっても
+      # 週次確認が丸ごと skip される (codex-review P2)。
       - name: Secrets の有無を判定
         id: keys
         env:
           ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK: ${{ secrets.DEEPSEEK_API_KEY }}
+          GEMINI: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          if [ -n "$ANTHROPIC" ]; then echo "have=true" >> "$GITHUB_OUTPUT"
-          else echo "have=false" >> "$GITHUB_OUTPUT"; fi
-      - name: 上流実在確認
+          if [ -n "$ANTHROPIC" ] || [ -n "$DEEPSEEK" ] || [ -n "$GEMINI" ]; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          fi
+      # --strict: 1 ベンダーでも未確認なら fail。
+      # 「Anthropic だけ確認できて DeepSeek は未確認」を成功扱いにすると、
+      # まさに R1 の退役 (DeepSeek 側) を見逃す構造が残る (codex-review P2)。
+      - name: 上流実在確認 (全ベンダー必須)
         if: steps.keys.outputs.have == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -65,7 +82,7 @@ jobs:
           [ -n "${ANTHROPIC_API_KEY:-}" ] && printf '%s' "$ANTHROPIC_API_KEY" > ~/.anthropic_token
           [ -n "${DEEPSEEK_API_KEY:-}" ]  && printf '%s' "$DEEPSEEK_API_KEY"  > ~/.deepseek_token
           [ -n "${GEMINI_API_KEY:-}" ]    && printf '%s' "$GEMINI_API_KEY"    > ~/.gemini_token
-          bash scripts/model-doctor.sh --probe
+          bash scripts/model-doctor.sh --probe --strict
       - name: Secrets 未設定の告知
         if: steps.keys.outputs.have != 'true'
         run: |
