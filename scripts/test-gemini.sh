@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Gemini 2.5 Pro API 動作確認
+# Gemini 3.1 Pro API 動作確認
+# モデル ID の単一ソースは config/models.yml (ADR-0017)
 # Linear: AGENT-3
 set -euo pipefail
 
@@ -16,7 +17,7 @@ if [ -z "${GEMINI_API_KEY:-}" ]; then
   fi
 fi
 
-MODEL="${GEMINI_MODEL:-gemini-2.5-pro}"
+MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
 PROMPT="${1:-1から10までの素数を列挙し、なぜそれが素数なのか1行で説明してください。}"
 
 echo "=== Gemini API 動作確認 ($MODEL) ==="

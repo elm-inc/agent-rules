@@ -1,14 +1,14 @@
 ---
 name: gemini-review
-description: Gemini 2.5 Pro の長文コンテキスト (1M+ token) でリポジトリ横断レビューを行う。大規模リファクタ・複数ファイルの整合性・ADR とコードの drift・全体アーキテクチャ検証など、Claude/Codex の通常コンテキストに収まらない範囲で使う
+description: Gemini 3.1 Pro の長文コンテキスト (入力 1M token) でリポジトリ横断レビューを行う。大規模リファクタ・複数ファイルの整合性・ADR とコードの drift・全体アーキテクチャ検証など、Claude/Codex の通常コンテキストに収まらない範囲で使う
 argument-hint: "[--scope <path or glob> | --diff [--base <branch>] | --adr <path>] [+ 観点]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Read
 ---
 
-# Gemini 2.5 Pro による長文コンテキスト・リポジトリ横断レビュー
+# Gemini 3.1 Pro による長文コンテキスト・リポジトリ横断レビュー
 
-Gemini 2.5 Pro (1M+ token コンテキスト) を使い、Claude/Codex の通常コンテキストでは収まらない範囲のレビューを行う。**多数ファイル横断 / ADR とコードの drift / 大規模設計変更** が主用途。
+Gemini 3.1 Pro (入力 1,048,576 token / 出力 65,536 token) を使い、Claude/Codex の通常コンテキストでは収まらない範囲のレビューを行う。**多数ファイル横断 / ADR とコードの drift / 大規模設計変更** が主用途。
 
 ## 使用判断
 
@@ -25,7 +25,10 @@ Gemini 2.5 Pro (1M+ token コンテキスト) を使い、Claude/Codex の通常
 
 - 環境変数 `GEMINI_API_KEY` が設定されていること
 - 未設定なら https://aistudio.google.com/apikey で取得
-- エンドポイント: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent`
+- エンドポイント: `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent`
+
+> **モデル ID は [`config/models.yml`](../../config/models.yml) が単一ソース**。ここを直に書き換えず台帳を先に更新し、`bash scripts/model-doctor.sh` を通すこと。
+> 旧 `gemini-2.5-pro` は **2026-10-16 退役予定**。まだ動くが期限がある (ADR-0017)。 <!-- model-doctor:allow -->
 
 ## 引数の解釈
 
@@ -121,9 +124,10 @@ echo "## 関連コード (ADR で言及されているパス配下)"
 
 ### 4. Gemini API 呼び出し
 
-> **重要 (Phase 4 試運転で判明)**: Gemini 2.5 Pro は **thinking モードがデフォルト有効**で、簡単な質問でも 1500-4000 token を思考に消費する。`maxOutputTokens` が小さいと thinking で枯渇して **応答 0 token** になる。
-> - `maxOutputTokens: 8192` を下限とする (内訳: thinking ~4000, output ~4000)
-> - 必要に応じ `thinkingConfig.thinkingBudget: 0` で thinking を無効化 (簡潔な指摘で十分な場合)
+> **重要**: Gemini 3.1 Pro も **thinking が常時有効**で、`maxOutputTokens` が小さいと thinking で枯渇して **応答 0 token** になる (2.5 Pro からの継続的な罠)。
+> - `maxOutputTokens: 8192` を下限とする
+> - **`thinkingConfig.thinkingBudget: 0` は 3.1 Pro では使えない** — `400 Budget 0 is invalid. This model only works in thinking mode.` になる。
+>   コストを絞るときは `thinkingConfig.thinkingLevel` を使う (`low` / `medium` / `high` の 3 値。`minimal` は拒否される。2026-08-17 実測)
 
 ```bash
 PAYLOAD=$(jq -n \
@@ -136,12 +140,12 @@ PAYLOAD=$(jq -n \
     }
   }')
 
-RESPONSE=$(curl -sf "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=$GEMINI_API_KEY" \
+RESPONSE=$(curl -sf --max-time 600 "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=$GEMINI_API_KEY" \
   -H "Content-Type: application/json" \
   -d "$PAYLOAD")
 
 # 応答テキスト
-echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "(empty — thinking で枯渇の可能性。maxOutputTokens を増やすか thinkingBudget: 0 を試す)"'
+echo "$RESPONSE" | jq -r '[.candidates[0].content.parts[]?.text] | join("") | select(length > 0) // "(empty — thinking で枯渇の可能性。maxOutputTokens を増やすか thinkingLevel: low を試す)"'
 
 # 使用量 (thinking tokens は output 料金で課金される)
 echo ""
@@ -150,19 +154,21 @@ echo "$RESPONSE" | jq -r '.usageMetadata | "  入力: \(.promptTokenCount), 出�
 echo "  終了理由: $(echo "$RESPONSE" | jq -r '.candidates[0].finishReason // "?"')"
 ```
 
-#### thinking 無効化が望ましいケース
+#### thinking を絞りたいケース
 
 ```bash
-# 簡潔な指摘のみ欲しい場合 (コスト 60-75% 削減)
+# 簡潔な指摘のみ欲しい場合 (thinking token を削減)
 PAYLOAD=$(jq -n --arg content "$PROMPT" '{
   contents: [{parts: [{text: $content}]}],
   generationConfig: {
     temperature: 0.2,
     maxOutputTokens: 4096,
-    thinkingConfig: {thinkingBudget: 0}
+    thinkingConfig: {thinkingLevel: "low"}
   }
 }')
 ```
+
+> 3.1 Pro は thinking を **完全には切れない**。`low` が下限で、それでも短い応答に 100 token 前後は消費する。「thinking を 0 にしてコストを落とす」運用は 2.5 Pro 限りの手だったと理解すること。
 
 ### 5. 結果表示
 
@@ -186,17 +192,20 @@ PAYLOAD=$(jq -n --arg content "$PROMPT" '{
 
 ## コスト
 
-Gemini 2.5 Pro:
-- Input: $1.25 / 1M token (200K まで) / $2.50 / 1M (超過分)
-- Output: $10 / 1M token (**thinking tokens を含む**)
+Gemini 3.1 Pro (2026-08 時点の目安。正は [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)):
+- Input: $2.00 / 1M token (200K まで) / $4.00 / 1M (200K 超)
+- Output: $12.00 / 1M token (200K まで) / $18.00 / 1M (200K 超) — いずれも **thinking tokens を含む**
+- Cached input: $0.20 / 1M token
 
-実測 (Phase 4): 1453 input + 1196 output + **3688 thinking** = 6337 token → 約 $0.051 (8 円)。**thinking が出力料金の 3 倍以上を占める** ことに注意。
+2.5 Pro より単価は上がったが、**入力 1M・thinking 常時有効**で 1 回あたりの到達範囲が広い。**thinking が出力料金の大半を占める**構造は変わらないので、`maxOutputTokens` を絞るのではなく `thinkingLevel: low` で調整する。
 
-500 ファイル (2.5M token) を 1 回投げると input $5 程度。**頻発させない用途**として設計済み。簡潔な指摘で十分な場合は `thinkingConfig.thinkingBudget: 0` で 60-75% 削減可能。
+1M token を 1 回投げると input $4 程度。**頻発させない用途**として設計されている。
 
 ## 注意事項
 
 - 1M token 超のリポは `--scope` でサブツリーに絞る
 - バイナリ・画像・大きな snapshot ファイルは除外する (`! -name "*.snap"` 等)
-- 機密性が高い場合は Google AI Studio のデータ利用ポリシーを確認。`gemini-2.5-pro` の paid tier では学習に使われない
+- 機密性が高い場合は Google AI Studio のデータ利用ポリシーを確認。paid tier では学習に使われない
+- `-preview` サフィックス付きモデルは GA 化で ID が変わる。`bash scripts/model-doctor.sh --probe` を定期実行して退役・改名を検知する
+- **モデル ID をここに直書きしない**。`config/models.yml` を更新してから doctor で検証する (ADR-0017)
 - 出力の指摘は対象が広い分、Claude/ユーザー側で優先度判断が必須

@@ -1,30 +1,36 @@
 # AI 開発ワークフロー (多層・多モデル) 設計
 
 - Linear Project: [AI 開発ワークフロー多層化](https://linear.app/elm-inc/project/ai-開発ワークフロー多層化-5d5bc734ffcd)
-- ADR: [0001-multi-llm-development-workflow](../adr/0001-multi-llm-development-workflow.md)
-- 制定日: 2026-05-22
-- 状態: **運用開始 (Phase 1-5 完了)、ROI 評価中**
+- ADR: [0017-ai-workflow-model-refresh-and-review-layers](../adr/0017-ai-workflow-model-refresh-and-review-layers.md) (2026-08-17 に [0001](../adr/0001-multi-llm-development-workflow.md) を Supersede)
+- 制定日: 2026-05-22 / 最終棚卸し: **2026-08-17**
+- 状態: **運用中。2026-08 棚卸しでモデル刷新・レビュー 4 層集約・モデル台帳導入**
 
 ## 1. 背景・目的
 
-AI に開発・レビュー・検証を任せる比率が上がるため、**単一モデル依存をやめて多層化** する。実装は Claude Opus 4.8 (高難度の要所は Fable 5)、レビュー・テスト生成を複数ベンダーの LLM (Anthropic / OpenAI / Google / DeepSeek / ローカル Qwen) で分担する。
+AI に開発・レビュー・検証を任せる比率が上がるため、**単一モデル依存をやめて多層化** する。実装は Claude Opus 5 (高難度の要所は Fable 5)、レビュー・テスト生成を複数ベンダーの LLM (Anthropic / OpenAI / Google / DeepSeek / ローカル Qwen) で分担する。
 
 Claude と GPT は学習分布が近く同じ間違い方をしやすいため、Gemini と DeepSeek を混ぜて思考の多様性を確保する。さらに pre-commit hooks 等の **機械検証 (非 AI)** を併用し、**3 層 (機械・LLM・人間)** で品質を担保する。
 
+> **2026-08 の更新 (ADR-0017)**: モデル能力が圧縮され、差別化点がモデルからハーネス/検証へ移った。これを受けて役割の軸を「ベンダー → 固定割当」から「**その工程に何が要るか**」へ組み替え、レビューを **4 層 (床 / 多様性 / 深さ / 最後の砦)** に集約した。**多様性は自前スキル (異ベンダー 1 つ)、深さはハーネス標準 `/code-review`** と役割を分ける — ハーネスの多エージェント検証は全部 Claude なので groupthink を原理的に解けないため。
+
 ## 2. 採用したモデル・スキル
 
-| ロール | モデル / ツール | スキル | 採用理由 |
-|---|---|---|---|
-| 実装 (主) | Claude Opus 4.8 (要所は Fable 5) | (Claude Code 本体) | 長文推論・コード横断、常用最高性能枠 (最難関は Fable 5 委譲) |
-| 0 次レビュー | ローカル Qwen2.5-Coder-32B (vLLM/FP8) | `/local-review` | コスト 0、機密データ送信不要、無制限回せる |
-| セカンドオピニオン | Codex (GPT-5) | `/codex-review` 他 | Anthropic と別ベンダー、修正提案が具体的 |
-| 設計レッドチーム | DeepSeek-R1 (API) | `/deepseek-redteam` | 思考連鎖で深い問題発見、$0.007/回 と激安 |
-| リポ横断 | Gemini 2.5 Pro (1M context) | `/gemini-review` | cross-file 視点で唯一無二の指摘 |
-| テスト観点抽出 (新 ADR-0002) | DeepSeek-R1 + Qwen (+ 任意で Distill/Gemini) | `/test-generate --brainstorm` | 拡散的タスク、多モデル並列で観点カバレッジ向上 |
-| テスト実装 | Qwen-Coder-32B FP8 | `/test-generate --implement` または引数なし | 収束的、単一モデルで十分 |
-| テストデータ | Qwen (バッチ) | `/test-data` | 関係制約推論 + コスト 0 で大量生成 |
-| **テスト品質検証 (新)** | mutmut / Stryker | `/mutation-check` (AGENT-18) | AI 生成テストの tautology を機械検出、生存変異率で精度可視化 |
-| 機械検証 | pre-commit hooks | (各リポで設定) | AI と独立した第 3 層 |
+**モデル ID の単一ソースは [`config/models.yml`](../../config/models.yml)。下表は読み物で、正はそちら** (ADR-0017)。
+
+| 層 | ロール | モデル / ツール | スキル | 採用理由 |
+|---|---|---|---|---|
+| — | 実装 (主) | Claude Opus 5 (要所は Fable 5) | (Claude Code 本体) | 長文推論・コード横断。Opus 4.8 と同価格で能力向上 |
+| 床 | 0 次レビュー | ローカル Qwen3-Coder-30B-A3B (vLLM/AWQ 4bit) | `/local-review` | コスト 0、機密データ送信不要、無制限。**199 tok/s** |
+| 床 | 探索・調査 | Claude Haiku 4.5 (+ 重い探索は Sonnet 5) | `explorer` / `researcher` | 司令塔の文脈とコストを節約 (ADR-0006) |
+| 多様性 | セカンドオピニオン | Codex (既定 GPT-5.6 Sol) | `/codex-review` 他 | Anthropic と別ベンダー、修正提案が具体的。ID は Codex CLI 管理 |
+| 多様性 | 設計レッドチーム | DeepSeek V4-Pro (思考モード) | `/deepseek-redteam` | 別学習系統で深い問題発見、1 回 2 円前後 |
+| 多様性 | リポ横断 | Gemini 3.1 Pro (入力 1M) | `/gemini-review` | cross-file 視点で唯一無二の指摘 |
+| 深さ | 敵対的検証 | ハーネス標準 (Claude) | `/code-review` | 指摘を検証して絞る。**多様性は解けない** |
+| 砦 | 最終レビュー | Claude Fable 5 | `/fable-review` | 高リスク変更のみ (ADR-0010 の課金規律) |
+| — | テスト観点抽出 | DeepSeek V4-Flash + ローカル Qwen (+ 任意で Gemini) | `/test-generate --brainstorm` | 拡散的タスク、多モデルで観点カバレッジ向上 |
+| — | テスト実装 / データ | ローカル Qwen | `/test-generate --implement` / `/test-data` | 収束的、単一モデルで十分。コスト 0 |
+| — | テスト品質検証 | mutmut / Stryker | `/mutation-check` | AI 生成テストの tautology を機械検出 |
+| 機械 | 静的検証 | pre-commit hooks + `model-doctor` | (各リポで設定) | AI と独立した層。モデル退役も CI で検出 |
 
 ## 3. 運用フロー (実績ベース)
 
@@ -35,15 +41,20 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
    └→ (任意) /codex-audit で実装視点ツッコミ
 
 [実装]
-  Claude Opus 4.8 で実装 (高難度は Fable 5 委譲)
+  Claude Opus 5 で実装 (高難度は Fable 5 委譲)
 
-[コミット前]
-  /local-review                      ← 0 次 (秒)
-  pre-commit hooks (型/lint/semgrep) ← 機械
-  (必要時) /test-generate            ← テスト追加
-  /codex-review                      ← セカンドオピニオン
-  (必要時) /gemini-review            ← リポ横断
-  (高リスク変更のみ) /fable-review   ← 最終 (最後の砦)
+[コミット前]  ← 4 層。上から順に、必要な層だけ回す (ADR-0017)
+  床      /local-review + pre-commit (型/lint/semgrep)   ← 常時。秒オーダー・0 円
+          (必要時) /test-generate
+  多様性  異ベンダーを 1 つだけ選ぶ:
+            設計を疑う      → /deepseek-redteam
+            10+ファイル/drift → /gemini-review
+            実装視点         → /codex-review
+  深さ    /code-review                                   ← 敵対的検証で指摘を絞る
+  砦      /fable-review                                  ← 高リスク変更のみ
+
+  ※ 高リスク変更では「多様性」を省略しない。深さ・砦はどちらも Claude 系なので、
+     省くと異ベンダーの独立視点がゼロになる (ADR-0017 レッドチーム指摘)
 
 [実行検証]
   /verify, E2E テスト
@@ -65,7 +76,33 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 
 実装前に**仕様 + 各基準の pass/fail を確認する実行可能手段**を書く (drift 防止)。本リポは `docs/design/*.md` の受け入れ基準 + 検証手段欄で実践済み。フォーマットの参考に [GitHub Spec Kit](https://github.com/github/spec-kit) (2026-08 参照)。仕様が固まったら redteam → 実装 → 上記検証ループ、の順。
 
-## 4. ベンチマーク実績 (Phase 4 試運転)
+## 4. ベンチマーク実績
+
+### 4-1. 2026-08 棚卸し時点 (ADR-0017)
+
+ローカル LLM の載せ替え検証。RTX PRO 4500 Blackwell (32GB, sm_120) / vLLM 0.21.0 で**全候補を実際にロードして**測定:
+
+| 候補 | 重み | 結果 | スループット |
+|---|---|---|---|
+| **cyankiwi/Qwen3-Coder-30B-A3B-AWQ-4bit** (MoE act 3B) | 16.9 GiB | ✅ 採用。KV cache 92,560 tok | **199 tok/s** |
+| nvidia/Qwen3.6-35B-A3B-NVFP4 (MoE) | 21.8 GiB | ❌ OOM (MoE が非量子化に fallback) | — |
+| nvidia/Qwen3.6-27B-NVFP4 (dense) | ~14 GiB | ❌ OOM (ModelOpt FP8 経路) | — |
+| cyankiwi/Qwen3.6-27B-AWQ-INT4 (dense) | 19.0 GiB | ❌ OOM @32K ctx | — |
+| (旧) RedHatAI/Qwen2.5-Coder-32B-FP8 | ~30 GiB | ⚠️ offload 6GB 必須 | 6 tok/s |
+
+**結果: 速度 33 倍・context 22 倍 (4096 → 32768)**。ADR-0001 から積み残していた「Qwen 6 tok/s が律速」がここで解消した。
+
+> **NVFP4 は理論上は最適だが現時点では使えない**。Blackwell ネイティブ 4bit だが vLLM 0.21.0 は sm_120 の NVFP4 **MoE カーネルを持たず bf16 に展開**する (vllm#31085)。vLLM 側の対応が入ったら再評価する。
+
+その他の実測 (2026-08-17):
+
+| 項目 | 実測 |
+|---|---|
+| DeepSeek V4-Pro 思考モード | `thinking:{type:enabled}` + `reasoning_effort` の**両方**必要。思考は `reasoning_content` に入る |
+| Gemini 3.1 Pro | `thinkingBudget: 0` は **400 で拒否** (`only works in thinking mode`)。代替は `thinkingLevel: low\|medium\|high` |
+| Gemini 3.1 Pro thinking 量 | 1 token の応答にも 46-176 thinking tok を消費。`maxOutputTokens` は潤沢に |
+
+### 4-2. Phase 4 試運転 (2026-05・当時のモデル構成)
 
 | スキル | LLM | 入力 tok | 出力 tok | 思考 tok | 応答時間 | 1 回コスト |
 |---|---|---|---|---|---|---|
@@ -82,15 +119,36 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 - `/test-generate`: 14 ケース + 境界値網羅、ただし AI assertion 要 review
 - `/test-data`: 関係制約守る、Phase 5 でプロンプト改訂済
 
-## 5. 振り返り (Phase 4-5 時点)
+## 5. 振り返り
 
-### 何が効いたか
+### 5-0. 2026-08 棚卸しで分かったこと (ADR-0017)
+
+**一番の学びは「壊れていたことに気づけなかった」こと**。`deepseek-reasoner` (R1) は 2026-07-24 に退役していたが、モデル ID が
+`skills/deepseek-redteam/SKILL.md` に直接埋まっていたため、**約 3 週間そのスキルは実行すれば必ず失敗する状態**だった。
+ADR-0001 が想定していたのは「LLM の出力品質が落ちる」リスクで、「自分は何も変えていないのに上流が消える」という障害クラスは考慮外だった。
+
+→ 対策として `config/models.yml` (台帳) + `scripts/model-doctor.sh` (drift 静的検査 + 上流実在確認) + CI を導入。
+
+**副産物として、サプライチェーン guard `vllm-verify-model.sh` が一度も機能していなかったことも判明した**:
+
+1. `while` をパイプの右辺に置いていたためサブシェルになり、`fail` の増加が親に伝わらず**改ざんを検出しても `exit 0`**
+2. HF tree API の SHA256 は `.lfs.oid` にあるのに `.lfs.sha256` を読んでいたため、**全ファイルが skip**
+
+「guard を置いた」ことと「guard が効いている」ことは別物で、**guard 自体にも検証が要る**。
+
+**机上比較は当てにならない**。ローカルモデル選定では、ベンチマークとスペック上は NVIDIA の NVFP4 版が最適だったが、
+実際にロードすると 2 種とも OOM した (vLLM が sm_120 の NVFP4 MoE カーネルを持たない)。
+**候補は全部実際に起動して決める**のが結局は速い。
+
+### 5-1. Phase 4-5 時点の振り返り
+
+#### 何が効いたか
 - **DeepSeek-R1 の高 ROI**: 7 円で設計の致命的問題を発見。`/codex-review` と組み合わせると groupthink を効果的に防ぐ
 - **Gemini の cross-file 視点**: 単一ファイルでは見えない drift を確実に検出。コストは高いが「使い所」が明確
 - **ローカル Qwen の常駐**: 0 次レビューを無限に回せる安心感。機密コードも送信不要
 - **トークンファイル方式** (`~/.*_token` perms 600 + `env-snippet.sh`): バックアップ漏洩リスク低減
 
-### 何が効かなかったか・課題
+#### 何が効かなかったか・課題
 - **Qwen 推論速度 6 tokens/sec が律速** — `/test-generate` `/test-data` で 200 秒超え
   - 原因: CPU offload 6GB の PCIe shuttle
   - Phase 6+ 対策: offload 3-4GB に削減、または 14B モデル切替検討
@@ -99,7 +157,7 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 - **Qwen max_model_len 4096 制約** — KV cache 不足で縮小せざるを得なかった
   - Phase 6+ 対策: デスクトップ GPU 解放 + max_model_len 8192 に拡張
 
-### 落とし穴の記録
+#### 落とし穴の記録
 1. **HuggingFace unauthenticated レート制限** — 17GB で DL ストール。HF_TOKEN 必須
 2. **online FP8 量子化で OOM** — 32B モデルは pre-quantized FP8 必須 (RedHatAI 等)
 3. **Gemini 2.5 Pro は無料枠なし** — billing 必須 (Prepay or Standard)
@@ -117,12 +175,12 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 ### クラウド LLM (1 開発者あたり 1 ヶ月想定)
 | API | 月の想定使用 | 月額 |
 |---|---|---|
-| Claude (Anthropic) | 既存 | (既存) |
+| Claude (Anthropic) | 既存 (Opus 5 / Fable 5) | (既存 + Fable 超過分。ADR-0010) |
 | Codex (OpenAI) | 既存 | (既存) |
-| Gemini 2.5 Pro | `/gemini-review` × 10-20 回 | $1-2 |
-| DeepSeek-R1 | `/deepseek-redteam` × 30-50 回 | $0.5-1 |
+| Gemini 3.1 Pro | `/gemini-review` × 10-20 回 | $2-5 |
+| DeepSeek V4-Pro/Flash | `/deepseek-redteam` × 30-50 回 | $0.5-1 |
 
-**追加コスト**: 月 $2-3 程度の想定 (実測は Phase 6+ で更新)。
+**サイドベンダーの追加コストは月 $3-6 程度で、金額としては誤差**。コスト管理の焦点は一貫して **Anthropic のティア選択 (Opus 5 か Fable 5 か)** にある — 2026-06 の Fable 実測は約 3 日で ~$595 で、サイドベンダー年間分を数日で超える。ADR-0010 の規律が効くのはこちら。
 
 ## 7. 次の改善案 (Phase 5 引継ぎ + 今後)
 
@@ -132,16 +190,20 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 - [x] `/test-generate` 動的 max_tokens + 実行検証フロー
 - [x] `/local-review` 動的 max_tokens + 大差分分割勧告
 
+### 完了 (2026-08 棚卸し / ADR-0017)
+- [x] **Qwen の速度律速を解消** — CPU offload 撤廃 + MoE 化で 6 → 199 tok/s、max_model_len 4096 → 32768
+- [x] **モデル退役の自動検知** — `config/models.yml` + `scripts/model-doctor.sh` + CI (`model-drift.yml`)
+- [x] **レビュー層の責務重複を整理** — ADR-0001 の宿題。6 スキル → 4 層に再定義
+- [x] サプライチェーン guard の実バグ 2 件修正 (詳細は §5-0)
+
 ### 中期 (Phase 6+)
-- [ ] Qwen CPU offload 削減 (6GB → 3-4GB)、max_model_len 8192 拡張
-- [ ] デスクトップ GPU プロセス停止検討 (Xorg・gnome-shell)
+- [ ] デスクトップ GPU プロセス停止 (Xorg・gnome-shell が 2.2 GiB 常時占有。空ければ更に余裕が出る)
+- [ ] NVFP4 の再評価 (vLLM が sm_120 の NVFP4 MoE カーネルに対応したら)
 - [ ] `/multi-review` (複数 LLM 並列実行 + マージ)
 - [ ] `/local-review` の pre-commit hook 自動化
 - [ ] 試運転の CI 自動化 (回帰検出)
 
 ### 長期
-- [ ] AWQ INT4 量子化モデル評価 (Qwen の速度改善)
-- [ ] vLLM bench で 14B vs 32B の品質/速度トレードオフ実測
 - [ ] 組織コンプライアンス確認 (DeepSeek 中国経由の許容範囲)
 
 ## 8. 実運用データ追記欄

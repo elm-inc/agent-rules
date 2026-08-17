@@ -12,7 +12,8 @@ CLAUDE_MD="$REPO_DIR/CLAUDE.md"
 MAX_LINES="${CLAUDE_MD_MAX_LINES:-200}"
 
 # skill でない組み込みスラッシュコマンド (幽霊参照から除外)
-BUILTINS=" model verify run config rename resume plugin mcp clear help compact memory login logout "
+# code-review / security-review / init は Claude Code 同梱の builtin skill (本リポには置かない)
+BUILTINS=" model verify run config rename resume plugin mcp clear help compact memory login logout code-review security-review init "
 
 fail=0
 

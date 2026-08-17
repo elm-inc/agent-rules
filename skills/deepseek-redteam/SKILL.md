@@ -1,21 +1,24 @@
 ---
 name: deepseek-redteam
-description: DeepSeek-R1 (思考連鎖モデル) で設計やコード変更の盲点・代替案・破綻ケースを炙り出すレッドチーム。docs/design/*.md や差分に対して「致命的な見落としは?」を問う。Anthropic/OpenAI 系と異なる学習分布なので groupthink 対策に有効
+description: DeepSeek V4-Pro (思考モード) で設計やコード変更の盲点・代替案・破綻ケースを炙り出すレッドチーム。docs/design/*.md や差分に対して「致命的な見落としは?」を問う。Anthropic/OpenAI 系と異なる学習分布なので groupthink 対策に有効
 argument-hint: "<対象ファイル | --diff [--base <branch>] | --design <path>> [+ 観点]"
 disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(ls *) Read
 ---
 
-# DeepSeek-R1 によるレッドチーム
+# DeepSeek V4-Pro によるレッドチーム
 
-DeepSeek-R1 API の思考連鎖能力を使い、設計や実装の **致命的な盲点・代替案・破綻ケース** を洗い出す。Claude / GPT と学習系統が異なるため、同じ間違い方をしにくいのが利点。
+DeepSeek V4-Pro の思考モードを使い、設計や実装の **致命的な盲点・代替案・破綻ケース** を洗い出す。Claude / GPT と学習系統が異なるため、同じ間違い方をしにくいのが利点。
 
 ## 前提
 
 - 環境変数 `DEEPSEEK_API_KEY` が設定されていること
 - 未設定なら https://platform.deepseek.com/api_keys で取得するよう案内
 - エンドポイント: `https://api.deepseek.com/v1/chat/completions`
-- モデル: `deepseek-reasoner` (R1)
+- モデル: `deepseek-v4-pro` (思考モード有効・`reasoning_effort: high`)
+
+> **モデル ID は [`config/models.yml`](../../config/models.yml) が単一ソース**。ここを直に書き換えず台帳を先に更新し、`bash scripts/model-doctor.sh` を通すこと。
+> 旧 `deepseek-reasoner` (R1) は **2026-07-24 に退役済み**で、呼ぶと失敗する (ADR-0017)。 <!-- model-doctor:allow -->
 
 ## 引数の解釈
 
@@ -95,23 +98,35 @@ cat "$FILE_PATH"
 PAYLOAD=$(jq -n \
   --arg content "$PROMPT" \
   '{
-    model: "deepseek-reasoner",
+    model: "deepseek-v4-pro",
+    thinking: {type: "enabled"},
+    reasoning_effort: "high",
     messages: [{role: "user", content: $content}],
-    max_tokens: 8192
+    max_tokens: 32000
   }')
 
-RESPONSE=$(curl -sf https://api.deepseek.com/v1/chat/completions \
+RESPONSE=$(curl -sf --max-time 600 https://api.deepseek.com/v1/chat/completions \
   -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
   -H "Content-Type: application/json" \
   -d "$PAYLOAD")
 
-# 思考連鎖 (reasoning_content) と最終回答を分けて取得
+# 思考過程 (reasoning_content) と最終回答を分けて取得
 echo "## 思考過程"
 echo "$RESPONSE" | jq -r '.choices[0].message.reasoning_content // empty'
 echo ""
 echo "## 最終回答"
 echo "$RESPONSE" | jq -r '.choices[0].message.content'
+echo ""
+echo "## 使用量"
+echo "$RESPONSE" | jq -r '.usage | "  入力 \(.prompt_tokens) / 出力 \(.completion_tokens) (うち思考 \(.completion_tokens_details.reasoning_tokens // 0))"'
 ```
+
+> `thinking` と `reasoning_effort` は **両方**必要。省くと非思考モードで走り、レッドチームとしての深さが出ない。`reasoning_effort` は `low` / `high` / `max` を取る。
+
+> ⚠️ **`max_tokens` は思考 + 本文の合計上限**。`reasoning_effort: high` で大きめの入力を投げると **思考だけで使い切って本文が空**になる (2026-08-17 実測: 入力 9.5K tok に `max_tokens: 8192` で `reasoning_tokens=8192` / content 空)。Gemini の thinking 枯渇と同型の罠。
+> - **`max_tokens: 32000` を下限**とする
+> - 応答が空だったら `completion_tokens_details.reasoning_tokens` を見る。`max_tokens` と一致していたら枯渇なので増やすか `reasoning_effort` を下げる
+> - 上のスクリプトは使用量を必ず表示する。空応答を黙って「指摘なし」と解釈しないこと
 
 ### 5. 結果表示
 
@@ -135,7 +150,8 @@ echo "$RESPONSE" | jq -r '.choices[0].message.content'
 
 ## 注意事項
 
-- DeepSeek-R1 は思考連鎖を出すため出力が長くなる (10K-30K token)。タイムアウトは 5 分程度想定
+- V4-Pro は思考モードで出力が長くなる (10K-30K token)。タイムアウトは 10 分程度みておく
 - コストは安いが、本番コードを送る前にプロジェクトのコンプライアンス要件を確認 (DeepSeek は中国企業の API)
-- 機密性が高い場合は代わりに `/local-review` を使う or DeepSeek-R1 の weights をローカルで動かす案を検討
+- 機密性が高い場合は代わりに `/local-review` を使う
+- **モデル ID をここに直書きしない**。`config/models.yml` を更新してから `bash scripts/model-doctor.sh` で検証する (R1 退役を 3 週間見逃した再発防止・ADR-0017)
 - レッドチームは **批判的視点の提供** が目的。指摘の妥当性は Claude/ユーザーが判断する

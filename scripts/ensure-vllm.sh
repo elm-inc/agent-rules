@@ -19,9 +19,10 @@
 # 終了コード (up): 0=稼働中, 1=起動失敗(GPU競合等), 2 は内部用 (呼び出し側には 1 を返す)
 #
 # 主な環境変数 (デフォルトは常駐運用と同一設定):
-#   VLLM_PORT=8000  VLLM_MODEL=RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic
-#   VLLM_SERVED_NAME=qwen-coder  VLLM_MAX_LEN=4096  VLLM_GPU_MEM_UTIL=0.88
-#   VLLM_CPU_OFFLOAD_GB=6  VLLM_HF_CACHE=$HOME/.cache/huggingface
+#   VLLM_PORT=8000  VLLM_MODEL=cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit
+#   VLLM_REVISION=4bd30395b72ea6045edd04806c4fea448d4467b3  (台帳 pin: ADR-0017)
+#   VLLM_SERVED_NAME=qwen-coder  VLLM_MAX_LEN=32768  VLLM_GPU_MEM_UTIL=0.85
+#   VLLM_CPU_OFFLOAD_GB=0  VLLM_HF_CACHE=$HOME/.cache/huggingface
 #   VLLM_START_TIMEOUT=300 (秒)  VLLM_IDLE_MINUTES=15  VLLM_IDLE_POLL=60 (watcher へ継承)
 #   VLLM_IMAGE=vllm/vllm-openai:latest  ← 安定運用では版を pin 推奨 (例 :v0.21.0)。
 #     :latest のままでもメトリクス改名で watcher が誤停止しないよう idle-watch 側は fail-safe。
@@ -31,11 +32,15 @@ PORT="${VLLM_PORT:-8000}"
 BASE_URL="http://localhost:${PORT}/v1"
 CONTAINER="vllm-qwen-coder"
 IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:latest}"
-MODEL="${VLLM_MODEL:-RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic}"
+MODEL="${VLLM_MODEL:-cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit}"
+# 公式 org ではないため commit で pin する (config/models.yml と一致させること)
+REVISION="${VLLM_REVISION:-4bd30395b72ea6045edd04806c4fea448d4467b3}"
 SERVED_NAME="${VLLM_SERVED_NAME:-qwen-coder}"
-MAX_LEN="${VLLM_MAX_LEN:-4096}"
-GPU_MEM_UTIL="${VLLM_GPU_MEM_UTIL:-0.88}"
-CPU_OFFLOAD_GB="${VLLM_CPU_OFFLOAD_GB:-6}"
+MAX_LEN="${VLLM_MAX_LEN:-32768}"
+GPU_MEM_UTIL="${VLLM_GPU_MEM_UTIL:-0.85}"
+# AWQ 4bit (重み 16.9 GiB) なので offload 不要。0 のままにすること —
+# offload を入れると PCIe 往復が律速になり 6 tok/s 時代に逆戻りする (ADR-0017)
+CPU_OFFLOAD_GB="${VLLM_CPU_OFFLOAD_GB:-0}"
 HF_CACHE="${VLLM_HF_CACHE:-$HOME/.cache/huggingface}"
 START_TIMEOUT="${VLLM_START_TIMEOUT:-300}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -136,10 +141,10 @@ fi
       -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
       "$IMAGE" \
       --model "$MODEL" \
+      ${REVISION:+--revision "$REVISION"} \
       --max-model-len "$MAX_LEN" \
       --gpu-memory-utilization "$GPU_MEM_UTIL" \
-      ${CPU_OFFLOAD_GB:+--cpu-offload-gb "$CPU_OFFLOAD_GB"} \
-      --enforce-eager \
+      $([ "${CPU_OFFLOAD_GB:-0}" != "0" ] && echo --cpu-offload-gb "$CPU_OFFLOAD_GB") \
       --served-model-name "$SERVED_NAME" >/dev/null; then
     log "ERROR: docker run に失敗しました (GPU が他プロセスで使用中の可能性)。nvidia-smi で確認してください"
     exit 1

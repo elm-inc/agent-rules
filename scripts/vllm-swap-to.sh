@@ -2,16 +2,16 @@
 # vllm-swap-to.sh — A 案 (swap 方式) の補助スクリプト
 #
 # ADR-0002 採択 / Phase 1 ベンチで 32GB VRAM では複数モデル同時ロード不可と判明。
-# このスクリプトは主力 vllm-qwen-coder (32B FP8) を一時停止し、指定モデルを :8001
-# で起動、終了後に主力を復帰させる。`/test-generate --brainstorm --with-distill`
-# や手動レッドチームから呼び出す想定。
+# このスクリプトは主力 vllm-qwen-coder (30B-A3B AWQ4bit) の停止/復帰を扱う。
 # 復帰はオンデマンド既定 (ADR-0005) に合わせ ensure-vllm.sh 経由 (docker start ではない)。
 #
+# **swap ターゲットは現在ゼロ** — ADR-0017 で distill / coder-14b を廃止した
+# (前者は /test-generate --with-distill の廃止、後者は主力が 16.9 GiB になり
+#  VRAM を空ける動機が消えたため)。新設するときは config/models.yml に登録してから。
+#
 # Usage:
-#   bash vllm-swap-to.sh distill      # DeepSeek-R1-Distill-Qwen-14B (online FP8)
-#   bash vllm-swap-to.sh coder-14b    # Qwen-Coder-14B AWQ INT4
-#   bash vllm-swap-to.sh status       # 現状確認のみ (swap せず)
-#   bash vllm-swap-to.sh restore      # main vLLM の復帰のみ
+#   bash vllm-swap-to.sh status       # 現状確認
+#   bash vllm-swap-to.sh restore      # main vLLM の復帰
 
 set -uo pipefail
 
@@ -80,34 +80,7 @@ stop_swap() {
   fi
 }
 
-launch_distill() {
-  echo "Launching Distill-Qwen-14B online FP8 on :$PORT..."
-  docker run -d --name "$SWAP_CONTAINER" \
-    --gpus all --ipc=host -p "$PORT:8000" \
-    -v "$HF_CACHE":/root/.cache/huggingface \
-    -e HUGGING_FACE_HUB_TOKEN="$HF_TOKEN" \
-    vllm/vllm-openai:latest \
-    --model deepseek-ai/DeepSeek-R1-Distill-Qwen-14B \
-    --quantization fp8 \
-    --max-model-len 16384 \
-    --gpu-memory-utilization 0.90 \
-    --served-model-name distill \
-    --enforce-eager > /dev/null
-}
 
-launch_coder_14b() {
-  echo "Launching Qwen-Coder-14B AWQ INT4 on :$PORT..."
-  docker run -d --name "$SWAP_CONTAINER" \
-    --gpus all --ipc=host -p "$PORT:8000" \
-    -v "$HF_CACHE":/root/.cache/huggingface \
-    -e HUGGING_FACE_HUB_TOKEN="$HF_TOKEN" \
-    vllm/vllm-openai:latest \
-    --model Qwen/Qwen2.5-Coder-14B-Instruct-AWQ \
-    --max-model-len 4096 \
-    --gpu-memory-utilization 0.50 \
-    --served-model-name coder-14b \
-    --enforce-eager > /dev/null
-}
 
 case "$TARGET" in
   status)
@@ -119,29 +92,11 @@ case "$TARGET" in
     show_status
     ;;
   distill|coder-14b)
-    stop_main
-    stop_swap
-    if [ "$TARGET" = "distill" ]; then
-      launch_distill
-    else
-      launch_coder_14b
-    fi
-    if wait_healthy "http://localhost:$PORT/v1"; then
-      echo "  -> $TARGET ready on http://localhost:$PORT/v1 (served-model-name: $TARGET)"
-      echo ""
-      echo "Use it with:"
-      echo "  curl http://localhost:$PORT/v1/chat/completions \\"
-      echo "    -H 'Content-Type: application/json' \\"
-      echo "    -d '{\"model\":\"$TARGET\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}'"
-      echo ""
-      echo "When done, restore main with: bash $(basename "$0") restore"
-    else
-      echo "  !! $TARGET failed to start in 6 min. Logs:"
-      docker logs "$SWAP_CONTAINER" 2>&1 | tail -30
-      stop_swap
-      restore_main
-      exit 1
-    fi
+    echo "ERROR: swap ターゲット '$TARGET' は ADR-0017 で廃止されました。" >&2
+    echo "  distill:   /test-generate --with-distill の廃止に伴い不要 (代替: DeepSeek V4-Flash API)" >&2
+    echo "  coder-14b: 主力が 16.9 GiB になり VRAM を空ける目的が消滅" >&2
+    echo "  新しい swap 先が必要なら config/models.yml に追加してから実装してください。" >&2
+    exit 2
     ;;
   *)
     echo "Usage: $0 {distill|coder-14b|status|restore}" >&2

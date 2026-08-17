@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# vLLM + Qwen2.5-Coder-32B (FP8) コンテナ起動スクリプト
+# vLLM + Qwen3-Coder-30B-A3B (AWQ 4bit) コンテナ起動スクリプト
+# モデル ID の単一ソースは config/models.yml (ADR-0017)
 # Linear: AGENT-2
 set -euo pipefail
 
-MODEL="${VLLM_MODEL:-RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic}"
+MODEL="${VLLM_MODEL:-cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit}"
+REVISION="${VLLM_REVISION:-4bd30395b72ea6045edd04806c4fea448d4467b3}"  # 公式 org ではないため commit pin
 SERVED_NAME="${VLLM_SERVED_NAME:-qwen-coder}"
 PORT="${VLLM_PORT:-8000}"
 CONTAINER_NAME="vllm-qwen-coder"
-MAX_LEN="${VLLM_MAX_LEN:-4096}"
-GPU_MEM_UTIL="${VLLM_GPU_MEM_UTIL:-0.88}"
-ENFORCE_EAGER="${VLLM_ENFORCE_EAGER:-1}"  # 1=disable cudagraph (-2GB), 0=enable (高速だが OOM 余地)
-CPU_OFFLOAD_GB="${VLLM_CPU_OFFLOAD_GB:-6}"  # CPU に逃がす重み (32GB VRAM では 4-6 推奨)
+MAX_LEN="${VLLM_MAX_LEN:-32768}"
+GPU_MEM_UTIL="${VLLM_GPU_MEM_UTIL:-0.85}"
+ENFORCE_EAGER="${VLLM_ENFORCE_EAGER:-0}"  # AWQ 4bit は VRAM に余裕があるので cudagraph を活かす (0=有効)
+CPU_OFFLOAD_GB="${VLLM_CPU_OFFLOAD_GB:-0}"  # AWQ 4bit なら offload 不要。入れると PCIe が律速化する
 MODELS_DIR="${HOME}/models"
 
 mkdir -p "$MODELS_DIR"
@@ -30,7 +32,8 @@ OFFLOAD_FLAG=""
 
 echo "vLLM コンテナを起動します:"
 echo "  Model:        $MODEL"
-echo "  Quant:        pre-quantized FP8 (RedHatAI)"
+echo "  Quant:        AWQ 4bit (MoE total 30B / active 3B)"
+echo "  Revision:     $REVISION"
 echo "  Port:         $PORT"
 echo "  Max len:      $MAX_LEN"
 echo "  GPU util:     $GPU_MEM_UTIL"
@@ -49,6 +52,7 @@ docker run -d --restart no \
   -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
   vllm/vllm-openai:latest \
   --model "$MODEL" \
+  ${REVISION:+--revision "$REVISION"} \
   --max-model-len "$MAX_LEN" \
   --gpu-memory-utilization "$GPU_MEM_UTIL" \
   $EAGER_FLAG \

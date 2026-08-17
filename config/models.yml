@@ -1,0 +1,158 @@
+# モデル台帳 — スキル/スクリプトが使うモデル ID の単一ソース (根拠: ADR-0017)
+#
+# なぜ台帳が要るか:
+#   2026-07-24 に deepseek-reasoner (R1) が退役したが、モデル ID が
+#   skills/deepseek-redteam/SKILL.md に直接埋まっていたため 3 週間検知できなかった。
+#   「ベンダーは黙ってモデルを消す」を前提に、ID を一箇所に集めて機械検証する。
+#
+# 運用:
+#   - モデルを足す/変えるときは必ずここを先に直す
+#   - `bash scripts/model-doctor.sh` … ベンダー API に実在確認 + 台帳との drift 検査
+#   - CI (model-drift.yml) は API キー不要の drift 検査のみ実行する
+#   - `retired:` は「かつて使っていた ID」。docs/adr の履歴記述と突き合わせるための記録で、
+#     operational surface (skills/ scripts/ CLAUDE.md) に現れたら CI が落とす
+#
+# 四半期見直し: 次回 2026-11
+
+updated: 2026-08-17
+
+# --- 稼働中のモデル -------------------------------------------------------
+active:
+  # 司令塔・実装 (Claude Code のセッションモデル)
+  - key: session
+    vendor: anthropic
+    id: claude-opus-5
+    layer: 司令塔
+    note: "$5/$25 per MTok。Opus 4.8 と同価格で step-change。1M ctx"
+
+  # 最後の砦 (高リスク変更のみ・subagent 委譲)
+  - key: escalation
+    vendor: anthropic
+    id: claude-fable-5
+    layer: 最後の砦
+    note: "$10/$50 per MTok = Opus 5 の 2 倍。ADR-0010 の課金規律が適用される"
+
+  # 探索・調査サブエージェントの床
+  - key: explorer
+    vendor: anthropic
+    id: claude-haiku-4-5
+    # id は alias。呼び出しには使えるが /v1/models には dated ID で載るため、
+    # 疎通確認だけ upstream_id を見る (alias と実体の対応をここに記録する意味もある)。
+    upstream_id: claude-haiku-4-5-20251001
+    layer: 床
+    note: "$1/$5 per MTok。agents/explorer.md agents/researcher.md が使用"
+
+  # 重い探索・並列ワーカー (near-Opus @ Sonnet 価格)
+  - key: worker
+    vendor: anthropic
+    id: claude-sonnet-5
+    layer: 床
+    note: "$3/$15 per MTok (導入価格 $2/$10 は 2026-08-31 まで)。広いファンアウト用"
+
+  # 0 次レビュー / テスト実装 (ローカル・0 円・機密 OK)
+  - key: local
+    vendor: huggingface
+    id: cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit
+    # commit pin (必須): 発行元が公式 org ではないため、org 単位ではなく
+    # 「この 1 コミットだけ」を信頼する。vllm-verify-model.sh がこれを検証する。
+    revision: 4bd30395b72ea6045edd04806c4fea448d4467b3
+    layer: 床
+    served_as: qwen-coder
+    note: >-
+      MoE (total 30B / active 3B)。2026-08-17 に本機 (RTX PRO 4500 32GB / vLLM 0.21.0) で実測:
+      重み 16.91 GiB・KV cache 92,560 tok・199 tok/s。
+      旧 RedHatAI/Qwen2.5-Coder-32B-FP8 は重み約 30GB で offload 6GB を強いられ 6 tok/s・
+      max_model_len 4096 が律速だった (ADR-0001 の積み残し) → 速度 33 倍・context 22 倍。
+      NVIDIA 公式の NVFP4 版 (35B-A3B / 27B) は同環境で両方 OOM したため不採用 (ADR-0017)。
+
+  # 設計レッドチーム (異ベンダー・思考連鎖)
+  - key: redteam
+    vendor: deepseek
+    id: deepseek-v4-pro
+    layer: 多様性
+    params: '{"thinking":{"type":"enabled"},"reasoning_effort":"high"}'
+    response_field: choices[0].message.reasoning_content
+    note: "DeepSeek-V4-Pro-0813。R1 の後継。思考は reasoning_content に入る (2026-08-17 実呼び出しで確認)"
+
+  # テスト観点の多面出し (安価・大量)
+  - key: brainstorm
+    vendor: deepseek
+    id: deepseek-v4-flash
+    layer: 多様性
+    params: '{"thinking":{"type":"enabled"},"reasoning_effort":"high"}'
+    note: "DeepSeek-V4-Flash-0731。V4-Pro より 1 桁安い。観点の拡散用"
+
+  # リポ横断レビュー (長文コンテキスト)
+  - key: crossfile
+    vendor: gemini
+    id: gemini-3.1-pro-preview
+    layer: 多様性
+    note: >-
+      入力 1,048,576 tok / 出力 65,536 tok (API 実測)。thinking 既定 ON で
+      1 tok の応答にも 100+ thinking tok を消費するため maxOutputTokens は潤沢に。
+      gemini-2.5-pro は 2026-10-16 退役予定
+
+  # セカンドオピニオン (異ベンダー・実装視点)
+  - key: secondopinion
+    vendor: openai
+    id: null
+    managed_by: codex-cli
+    layer: 多様性
+    note: >-
+      Codex CLI が既定モデルを管理するため ID を固定しない (2026-07-09 以降の既定は
+      GPT-5.6 Sol)。スキル側も `codex review` / `codex exec` を呼ぶだけで --model を渡さない
+
+# --- 退役・移行済み -------------------------------------------------------
+# operational surface (skills/ scripts/ CLAUDE.md) にこれらが現れたら CI が落とす。
+# docs/adr/ docs/design/ の履歴記述は対象外 (過去の判断としての言及は正しい)。
+retired:
+  - id: deepseek-reasoner
+    vendor: deepseek
+    retired_on: 2026-07-24
+    successor: deepseek-v4-pro
+  - id: deepseek-chat
+    vendor: deepseek
+    retired_on: 2026-07-24
+    successor: deepseek-v4-flash
+  - id: gemini-2.5-pro
+    vendor: gemini
+    retires_on: 2026-10-16
+    successor: gemini-3.1-pro-preview
+    status: deprecated  # まだ生きているが期限あり
+  - id: claude-opus-4-8
+    vendor: anthropic
+    successor: claude-opus-5
+    status: active_upstream  # 上流では現役。本リポの既定から外しただけ
+  - id: RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic
+    vendor: huggingface
+    successor: cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit
+    status: active_upstream
+
+# --- 疎通確認の宛先 -------------------------------------------------------
+probes:
+  anthropic:
+    url: https://api.anthropic.com/v1/models
+    token_file: ~/.anthropic_token
+    auth: "x-api-key"
+    extra_header: "anthropic-version: 2023-06-01"
+    jq_ids: '.data[].id'
+  deepseek:
+    url: https://api.deepseek.com/v1/models
+    token_file: ~/.deepseek_token
+    auth: bearer
+    jq_ids: '.data[].id'
+  gemini:
+    url: "https://generativelanguage.googleapis.com/v1beta/models"
+    token_file: ~/.gemini_token
+    auth: query_key
+    jq_ids: '.models[].name | sub("^models/";"")'
+  openai:
+    url: https://api.openai.com/v1/models
+    token_file: ~/.openai_token
+    auth: bearer
+    jq_ids: '.data[].id'
+  huggingface:
+    url: https://huggingface.co/api/models/
+    token_file: ~/.hf_token
+    auth: bearer_optional
+    jq_ids: '.id'
