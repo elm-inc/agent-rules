@@ -23,8 +23,9 @@ Gemini 3.1 Pro (入力 1,048,576 token / 出力 65,536 token) を使い、Claude
 
 ## 前提
 
-- 環境変数 `GEMINI_API_KEY` が設定されていること
-- 未設定なら https://aistudio.google.com/apikey で取得
+- API キー: 環境変数 `GEMINI_API_KEY` → 無ければ `~/.gemini_token` (perms 600) の順に探す
+- どちらも無ければ https://aistudio.google.com/apikey で取得
+- `GEMINI_API_KEY= /gemini-review ...` (明示的に空) は **fallback せず中止** — 機密案件でクラウド送信を止める非常口
 - エンドポイント: `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent`
 
 > **モデル ID は [`config/models.yml`](../../config/models.yml) が単一ソース**。ここを直に書き換えず台帳を先に更新し、`bash scripts/model-doctor.sh` を通すこと。
@@ -44,9 +45,19 @@ Gemini 3.1 Pro (入力 1,048,576 token / 出力 65,536 token) を使い、Claude
 ### 1. API キー確認
 
 ```bash
+# 環境変数 → ~/.gemini_token の順に探す (deepseek-redteam と同じ規約)。
+# env だけに頼らない理由: ~/.bashrc は非対話シェルで早期 return するため、
+# CI・非対話実行・シェルを再起動していないセッションでは env が空になる。
+# ただし「明示的に空」(GEMINI_API_KEY= /gemini-review ...) はファイルへ
+# fallback せず中止する — 機密案件のクラウド送信を止める非常口を潰さないため。
+if [ -z "${GEMINI_API_KEY+set}" ] && [ -f ~/.gemini_token ]; then
+  GEMINI_API_KEY="$(cat ~/.gemini_token)"
+fi
 if [ -z "${GEMINI_API_KEY:-}" ]; then
-  echo "ERROR: GEMINI_API_KEY が未設定です"
-  echo "https://aistudio.google.com/apikey で取得し ~/.bashrc に追加してください"
+  echo "ERROR: GEMINI_API_KEY が未設定 (または明示的に空) で ~/.gemini_token もありません"
+  echo "https://aistudio.google.com/apikey で取得して以下のいずれかを実行:"
+  echo "  - export GEMINI_API_KEY=\"...\""
+  echo "  - umask 077 && read -s -p 'key: ' k && echo \"\$k\" > ~/.gemini_token && unset k"
   exit 1
 fi
 ```

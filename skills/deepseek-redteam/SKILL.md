@@ -12,8 +12,9 @@ DeepSeek V4-Pro の思考モードを使い、設計や実装の **致命的な�
 
 ## 前提
 
-- 環境変数 `DEEPSEEK_API_KEY` が設定されていること
-- 未設定なら https://platform.deepseek.com/api_keys で取得するよう案内
+- API キー: 環境変数 `DEEPSEEK_API_KEY` → 無ければ `~/.deepseek_token` (perms 600) の順に探す
+- どちらも無ければ https://platform.deepseek.com/api_keys で取得するよう案内
+- `DEEPSEEK_API_KEY= /deepseek-redteam ...` (明示的に空) は **fallback せず中止** — 機密案件でクラウド送信を止める非常口
 - エンドポイント: `https://api.deepseek.com/v1/chat/completions`
 - モデル: `deepseek-v4-pro` (思考モード有効・`reasoning_effort: high`)
 
@@ -34,9 +35,19 @@ DeepSeek V4-Pro の思考モードを使い、設計や実装の **致命的な�
 ### 1. API キー確認
 
 ```bash
+# 環境変数 → ~/.deepseek_token の順に探す (scripts/test-deepseek.sh と同じ規約)。
+# env だけに頼らない理由: ~/.bashrc は非対話シェルで早期 return するため、
+# CI・非対話実行・シェルを再起動していないセッションでは env が空になる。
+# ただし「明示的に空」(DEEPSEEK_API_KEY= /deepseek-redteam ...) はファイルへ
+# fallback せず中止する — 機密案件のクラウド送信を止める非常口を潰さないため。
+if [ -z "${DEEPSEEK_API_KEY+set}" ] && [ -f ~/.deepseek_token ]; then
+  DEEPSEEK_API_KEY="$(cat ~/.deepseek_token)"
+fi
 if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
-  echo "ERROR: DEEPSEEK_API_KEY が未設定です"
-  echo "https://platform.deepseek.com/api_keys で取得し ~/.bashrc に追加してください"
+  echo "ERROR: DEEPSEEK_API_KEY が未設定 (または明示的に空) で ~/.deepseek_token もありません"
+  echo "https://platform.deepseek.com/api_keys で取得して以下のいずれかを実行:"
+  echo "  - export DEEPSEEK_API_KEY=\"...\""
+  echo "  - umask 077 && read -s -p 'key: ' k && echo \"\$k\" > ~/.deepseek_token && unset k"
   exit 1
 fi
 ```
