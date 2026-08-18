@@ -135,6 +135,7 @@ echo ""
 echo "== Shell integration =="
 ensure_dir "$HOME/.claude/shell"
 handle_link "$REPO_DIR/scripts/zellij-hygiene.sh" "$HOME/.claude/shell/zellij-hygiene.sh"
+handle_link "$REPO_DIR/scripts/env-snippet.sh"    "$HOME/.claude/shell/env-snippet.sh"
 
 # ユーザーレベル settings の add-only 適用 / drift 検査。
 # add-only: template のトップレベルキーのうち user に無いものだけ追加。既存キーは決して上書きしない。
@@ -158,7 +159,9 @@ handle_user_settings() {
             echo "add:  $user を新規作成 (template から)"
         else
             echo "MISSING: $user (template あり。--fix で作成 or 手動配置)"
-            [[ "$MODE" == check ]] && PROBLEMS=$((PROBLEMS + 1))
+            # `[[ ]] && ...` を最終文にしない: 偽のとき戻り値 1 で set -e が発火し、
+            # 以降の Bash integration が丸ごと skip される (実際に踏んだ)
+            if [[ "$MODE" == check ]]; then PROBLEMS=$((PROBLEMS + 1)); fi
         fi
         return
     fi
@@ -183,7 +186,7 @@ handle_user_settings() {
         echo "add:  settings に追加: ${missing[*]}"
     else
         echo "DRIFT: settings 未適用キー: ${missing[*]} (--fix で add-only 追加)"
-        [[ "$MODE" == check ]] && PROBLEMS=$((PROBLEMS + 1))
+        if [[ "$MODE" == check ]]; then PROBLEMS=$((PROBLEMS + 1)); fi
     fi
 }
 handle_user_settings
@@ -206,6 +209,18 @@ if [[ "$MODE" != check ]]; then
     else
         printf '\n# zellij session hygiene (agent-rules)\n%s\n' "$ZJ_SNIPPET" >> "$HOME/.bashrc"
         echo "add:  .bashrc <- source zellij-hygiene.sh"
+    fi
+
+    # API キー・ローカル LLM の環境変数。キー本体は ~/.*_token (600) に置き、ここでは読むだけ。
+    # 注意: .bashrc は非対話シェルで早期 return するため、これが効くのは対話シェルと
+    # そこから継承する子プロセス (claude 等) のみ。CI や非対話実行では skill 側の
+    # ~/.*_token fallback が受け持つ。
+    ENV_SNIPPET='source $HOME/.claude/shell/env-snippet.sh'
+    if grep -qxF "$ENV_SNIPPET" "$HOME/.bashrc" 2>/dev/null; then
+        echo "ok:   .bashrc already sources env-snippet.sh"
+    else
+        printf '\n# AI workflow env (API keys / local LLM) (agent-rules)\n%s\n' "$ENV_SNIPPET" >> "$HOME/.bashrc"
+        echo "add:  .bashrc <- source env-snippet.sh  (要 source ~/.bashrc or 新しいシェル)"
     fi
 fi
 

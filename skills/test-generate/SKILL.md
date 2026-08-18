@@ -25,8 +25,9 @@ ADR-0002 採択により 2 モード化。**観点抽出** (拡散的タスク) 
 ## 前提
 
 - ローカル vLLM (Qwen3-Coder-30B-A3B) は**オンデマンド起動** — Qwen を使う前に `ensure-vllm.sh` で起動保証する (常駐させず、アイドル後は自動停止)。詳細: [`docs/adr/0005`](../../docs/adr/0005-on-demand-local-llm.md)
-- `--brainstorm` デフォルト: `DEEPSEEK_API_KEY` 必須。未設定ならローカル Qwen 単独に縮退する (中止しない)
-- `--with-gemini`: `GEMINI_API_KEY` 必須
+- `--brainstorm` デフォルト: `DEEPSEEK_API_KEY` (無ければ `~/.deepseek_token`)。どちらも無ければローカル Qwen 単独に縮退する (中止しない)
+- `--with-gemini`: `GEMINI_API_KEY` (無ければ `~/.gemini_token`)
+- **`DEEPSEEK_API_KEY=` / `GEMINI_API_KEY=` (明示的に空) はトークンファイルへ fallback しない** — 機密案件でクラウド送信を止める非常口 (下の「コマンド例」参照)
 - モデル ID の単一ソースは [`config/models.yml`](../../config/models.yml)。変更したら `bash scripts/model-doctor.sh`
 - セットアップ: [`docs/setup/local-llm.md`](../../docs/setup/local-llm.md)
 
@@ -109,6 +110,17 @@ property-based テストライブラリも検出 (pytest→hypothesis / vitest+j
 ```bash
 BRAINSTORM_TMP=$(mktemp -d)
 
+# 0. API キー解決: 環境変数 → ~/.*_token (perms 600) の順。
+#    env だけに頼らない理由: ~/.bashrc は非対話シェルで早期 return するため、
+#    CI・非対話実行・シェル未再起動のセッションでは env が空になる。
+#    「明示的に空」は fallback させない (機密案件のクラウド送信を止める非常口)。
+if [ -z "${DEEPSEEK_API_KEY+set}" ] && [ -f ~/.deepseek_token ]; then
+  DEEPSEEK_API_KEY="$(cat ~/.deepseek_token)"
+fi
+if [ -z "${GEMINI_API_KEY+set}" ] && [ -f ~/.gemini_token ]; then
+  GEMINI_API_KEY="$(cat ~/.gemini_token)"
+fi
+
 # 1. DeepSeek V4-Flash (API、思考モード)
 #    観点の「拡散」が目的なので V4-Pro ではなく 1 桁安い Flash を使う
 if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
@@ -127,7 +139,10 @@ curl -sf "${LOCAL_LLM_BASE_URL:-http://localhost:8000/v1}/chat/completions" \
   | jq -r '.choices[0].message.content' > "$BRAINSTORM_TMP/qwen.md"
 
 # 3. (--with-gemini) Gemini 3.1 Pro — repo 横断の invariant 抽出
-if [ "$WITH_GEMINI" = "1" ]; then
+if [ "$WITH_GEMINI" = "1" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
+  echo "WARN: --with-gemini だが GEMINI_API_KEY も ~/.gemini_token も無いため Gemini を skip"
+fi
+if [ "$WITH_GEMINI" = "1" ] && [ -n "${GEMINI_API_KEY:-}" ]; then
   curl -sf --max-time 600 "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=$GEMINI_API_KEY" \
     -H "Content-Type: application/json" \
     -d "$(jq -n --arg c "$PROMPT" '{contents:[{parts:[{text:$c}]}], generationConfig:{maxOutputTokens:8192}}')" \
@@ -263,7 +278,8 @@ Phase 3 で `--max-model-len 8192` 以上に拡張予定。
 # 観点抽出 (DeepSeek V4-Flash + ローカル Qwen の 2 モデル、デフォルト)
 /test-generate src/payment/processor.py --brainstorm
 
-# 観点抽出 (機密案件: DEEPSEEK_API_KEY を外してローカル Qwen 単独に縮退させる)
+# 観点抽出 (機密案件: 明示的に空を渡してローカル Qwen 単独に縮退させる)
+#   空を渡すこと自体が意思表示なので ~/.deepseek_token へは fallback しない
 DEEPSEEK_API_KEY= /test-generate src/payment/processor.py --brainstorm
 
 # 観点抽出 (Gemini で repo 横断 invariant 追加、コスト注意)
