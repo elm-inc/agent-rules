@@ -129,6 +129,7 @@
 - **Figma** `/figma` — 画像取込・design tokens 抽出・画像一括書き出し (REST)。対話的コード化は別経路のリモート MCP。**安全原則: Figma API を生 curl で叩かない (レート制御は必ず `/figma` 経由)・PAT/OAuth の 2 経路を混同しない・ローカル MCP は Linux 不可**。導入は [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)
 - **New Relic** `/newrelic` — 案件=別顧客テナント (取り違え=顧客データ混線、gh `_chd` 事故と同型)。**安全原則: いまどの顧客アカウントかを常に明示・検証可能にし暗黙の既定に倒さない (fail-closed)・New Relic MCP は global 登録しない・`.newrelic-profile`/`.envrc` は commit しない・鍵は argv に出さない**。接続後は `/newrelic doctor` で三者一致を検証。根拠 [`ADR-0008`](docs/adr/0008-newrelic-connection-hybrid.md) / 導入 [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)
 - **3D プリンタ造形** `/cad-print` — build123d で「書く→診断→視認→調整」。嵌合較正は `fit()` で一点管理 (マジックナンバー禁止)。根拠 [`ADR-0007`](docs/adr/0007-build123d-3d-printing-cad-skill.md)
+- **ポート棚卸し** `/ports` — 複数案件のポート利用状況を実態 (docker ラベル・プロセス情報) と設定から逆引き。空き探し・「なぜ起動できないか」も。**安全原則: 予約台帳は案件名を含むため本 public repo に置かない** (`~/.config/agent-rules/ports.yml`)。根拠 [`ADR-0018`](docs/adr/0018-port-inventory-and-registry.md)
 - **シェル環境** `/cli-help` — モダン CLI (rg/fd/bat/eza…) の即引き + soft reminder。導入・全停止 (`MODERN_CLI_HINTS=0`): [`docs/setup/modern-cli-setup.md`](docs/setup/modern-cli-setup.md)
 - ハードウェア系 (`/rigol-dho804` / `/webcam-jetson` / `/atopile-view` / `/mosh-clean`) はユーザー明示起動 (常時ロード対象外)
 

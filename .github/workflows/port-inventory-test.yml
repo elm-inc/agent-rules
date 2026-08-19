@@ -1,0 +1,35 @@
+name: port-inventory-test
+
+# /ports の解析ロジック (compose の ports 表記・台帳 YAML・行の畳み込み) を PR で機械検証する。
+# ここが壊れても実行時エラーにはならず「衝突なし」と静かに嘘をつくため、
+# 目視ではなく機械で押さえる (ADR-0018)。
+on:
+  pull_request:
+    paths:
+      - "scripts/port-inventory.py"
+      - "scripts/test-port-inventory.py"
+      - ".github/workflows/port-inventory-test.yml"
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet pyyaml
+      - name: 解析ロジックの回帰テスト
+        run: python3 scripts/test-port-inventory.py
+      - name: docker/ss が無い環境で fail-close すること
+        # 情報源が欠けたまま exit 0 で「衝突なし」を返さないことを CI で保証する。
+        # runner には docker があるので PATH を絞って欠落を再現する
+        run: |
+          workdir="$(mktemp -d)"
+          ln -s "$(command -v python3)" "$workdir/python3"
+          ln -s "$(command -v git)" "$workdir/git"
+          if PATH="$workdir" python3 scripts/port-inventory.py check >/dev/null 2>&1; then
+            echo "FAIL: 情報源が欠けているのに exit 0 を返した"
+            exit 1
+          fi
+          echo "ok: 情報源欠落時に非 0 で返した"
