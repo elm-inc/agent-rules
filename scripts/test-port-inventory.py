@@ -89,6 +89,31 @@ check("開始 > 終了", reg.range_of("reversed"), None)
 check("range 未指定", reg.range_of("no_range"), None)
 check("未知の案件", reg.range_of("missing"), None)
 
+# 明示ポート列 (慣用ポートで帯にまとまらない案件用)
+reg2 = pi.Registry(path=Path("/dev/null"), exists=True, projects={
+    "blocked": {"range": [13000, 13099]},
+    "legacy": {"ports": [3000, 5432, 6379]},
+    "both": {"range": [20000, 20009], "ports": [3306]},
+    "bad_ports": {"ports": "3000"},
+    "bad_item": {"ports": [3000, "x"]},
+})
+check("ポート列を読む", reg2.ports_of("legacy"), {3000, 5432, 6379})
+check("ポート列が無ければ空", reg2.ports_of("blocked"), set())
+check("リストでない ports は無視", reg2.ports_of("bad_ports"), set())
+check("数値でない要素だけ落とす", reg2.ports_of("bad_item"), {3000})
+
+check("帯だけの案件も宣言済み", reg2.declares("blocked"), True)
+check("ポート列だけの案件も宣言済み", reg2.declares("legacy"), True)
+check("未登録の案件", reg2.declares("missing"), False)
+
+check("帯の中は許可", reg2.allows("blocked", 13050), True)
+check("帯の外は不許可", reg2.allows("blocked", 14000), False)
+check("列挙されたポートは許可", reg2.allows("legacy", 5432), True)
+check("列挙されていないポートは不許可", reg2.allows("legacy", 5433), False)
+check("帯と列の併用 (帯側)", reg2.allows("both", 20005), True)
+check("帯と列の併用 (列側)", reg2.allows("both", 3306), True)
+check("帯と列の併用 (どちらでもない)", reg2.allows("both", 3307), False)
+
 # --------------------------------------------------------------------------
 # IPv4/IPv6 の二重行を畳む
 # --------------------------------------------------------------------------

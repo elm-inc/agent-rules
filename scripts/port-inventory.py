@@ -120,6 +120,40 @@ class Registry:
             return None
         return lo, hi
 
+    def ports_of(self, project: str) -> set[int]:
+        """明示的に列挙されたポート。
+
+        実測すると多くの案件は「web=3000 / db=5432」のような慣用ポートを使い、
+        連続帯にまとまらない (17 案件中 12 案件)。range だけの台帳はそういう
+        案件で使えないので、ポート列も受け付ける。
+        """
+        entry = self.projects.get(project)
+        if not isinstance(entry, dict):
+            return set()
+        raw = entry.get("ports")
+        if raw is None:
+            return set()
+        if not isinstance(raw, (list, tuple)):
+            SOURCE_ISSUES.append(f"台帳の {project}.ports はリストで書いてください: {raw!r}")
+            return set()
+        out: set[int] = set()
+        for item in raw:
+            try:
+                out.add(int(item))
+            except (TypeError, ValueError):
+                SOURCE_ISSUES.append(f"台帳の {project}.ports に数値でない値があります: {item!r}")
+        return out
+
+    def declares(self, project: str) -> bool:
+        """その案件について、台帳が何らかの確保を宣言しているか。"""
+        return self.range_of(project) is not None or bool(self.ports_of(project))
+
+    def allows(self, project: str, port: int) -> bool:
+        rng = self.range_of(project)
+        if rng and rng[0] <= port <= rng[1]:
+            return True
+        return port in self.ports_of(project)
+
 
 # --------------------------------------------------------------------------
 # repo / プロジェクト解決
@@ -703,10 +737,16 @@ REGISTRY_TEMPLATE = """# ポート予約台帳 (agent-rules /ports)
 # `/ports check` が「帯の重複」「帯からの逸脱」「未宣言の占有」を検出する。
 version: 1
 projects:
+  # 連続した帯で確保する場合
   # example-app:
   #   repo: ~/repos/github.com/example-org/example-app
   #   range: [13000, 13099]
-  #   note: "13000=frontend 13001=admin 13100=api"
+  #   note: "13000=frontend 13001=admin 13010=api"
+  #
+  # 慣用ポート (web=3000 / db=5432 など) で帯にまとまらない案件はポート列で書く。
+  # range と併用してもよい (どちらも確保として扱う)
+  # legacy-app:
+  #   ports: [3000, 5432, 6379]
 """
 
 
@@ -834,6 +874,7 @@ def used_ports(live: list[Live], declared: list[Declared], reg: Registry) -> set
         rng = reg.range_of(name)  # 不正値の検証を一箇所に寄せる
         if rng:
             used |= set(range(rng[0], rng[1] + 1))
+        used |= reg.ports_of(name)
     return used
 
 
@@ -895,6 +936,25 @@ def cmd_check(args) -> int:
             if a1 <= b2 and a2 <= b1:
                 errors.append(f"台帳の帯が重複: {n1} [{a1}-{b1}] と {n2} [{a2}-{b2}]")
 
+    # 明示ポート列どうし / ポート列と帯の重複も見る
+    claimed: dict[int, list[str]] = {}
+    for name in reg.projects:
+        for port in reg.ports_of(name):
+            claimed.setdefault(port, []).append(name)
+    for port, names in sorted(claimed.items()):
+        if len(names) > 1:
+            errors.append(f"台帳でポート {port} を複数案件が確保: {', '.join(sorted(names))}")
+    for name, (lo, hi) in ranges:
+        for other in reg.projects:
+            if other == name:
+                continue
+            inside = sorted(p for p in reg.ports_of(other) if lo <= p <= hi)
+            if inside:
+                errors.append(
+                    f"台帳の確保が重複: {other} の {', '.join(str(p) for p in inside)} が "
+                    f"{name} の帯 [{lo}-{hi}] に入っています"
+                )
+
     # 2. 起動を妨げる衝突を案件ごとに集約
     blocked: dict[str, list[tuple[int, set[str], str]]] = {}
     for d in binds:
@@ -937,26 +997,26 @@ def cmd_check(args) -> int:
 
     # 3. 台帳がある場合の帯チェック (案件ごとに 1 行へ畳む)
     unregistered: dict[str, list[int]] = {}
-    out_of_range: dict[str, tuple[tuple[int, int], list[int]]] = {}
+    undeclared: dict[str, list[int]] = {}
     for x in live:
         proj = strip_marker(x.project or "")
         if not proj:
             continue
-        rng = reg.range_of(proj)
-        if rng is None:
+        if not reg.declares(proj):
             if reg.exists:
                 unregistered.setdefault(proj, []).append(x.port)
             continue
-        if not (rng[0] <= x.port <= rng[1]):
-            entry = out_of_range.setdefault(proj, (rng, []))
-            entry[1].append(x.port)
+        if not reg.allows(proj, x.port):
+            undeclared.setdefault(proj, []).append(x.port)
 
     for proj, ports in sorted(unregistered.items()):
         listed = ", ".join(str(p) for p in sorted(set(ports)))
         warnings.append(f"{proj} は台帳に未登録 ({listed} を使用中)")
-    for proj, (rng, ports) in sorted(out_of_range.items()):
+    for proj, ports in sorted(undeclared.items()):
         listed = ", ".join(str(p) for p in sorted(set(ports)))
-        warnings.append(f"{proj} が帯 [{rng[0]}-{rng[1]}] の外で {listed} を使用中")
+        rng = reg.range_of(proj)
+        where = f"帯 [{rng[0]}-{rng[1]}] の外" if rng else "台帳の宣言外"
+        warnings.append(f"{proj} が{where}で {listed} を使用中")
 
     if not reg.exists:
         infos.append(

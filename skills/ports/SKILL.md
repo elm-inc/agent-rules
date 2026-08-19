@@ -95,11 +95,18 @@ python3 "$SCRIPT" --registry-init
 ```yaml
 version: 1
 projects:
+  # 連続した帯で確保する場合
   example-app:
     repo: ~/repos/github.com/example-org/example-app
     range: [13000, 13099]
-    note: "13000=frontend 13001=admin 13100=api"
+    note: "13000=frontend 13001=admin 13010=api"
+
+  # 慣用ポート (web=3000 / db=5432) で帯にまとまらない案件はポート列で書く
+  legacy-app:
+    ports: [3000, 5432, 6379]
 ```
+
+**帯だけでなくポート列も受ける**理由: 実測すると多くの案件は「web=3000 / db=5432」の慣用ポートを使っており、連続帯にまとまらない。`range` しか書けない台帳はそういう案件で使えない。`range` と `ports` は併用できる (どちらも確保として扱う)。
 
 ## 変更するときは
 
