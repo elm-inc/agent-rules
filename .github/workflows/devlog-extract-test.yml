@@ -1,0 +1,31 @@
+name: devlog-extract-test
+
+# /devlog の transcript 抽出を PR で機械検証する。
+# ここが壊れると (1) 別案件=顧客の会話を読む fail-closed が破れる、
+# (2) スキル展開やコマンド出力を「人間が書いた文」として教材に載せる、
+# のどちらも **エラーにならず静かに起きる** ため、目視ではなく機械で押さえる (ADR-0016)。
+on:
+  pull_request:
+    paths:
+      - "scripts/transcript-extract.py"
+      - "scripts/test-transcript-extract.py"
+      - ".github/workflows/devlog-extract-test.yml"
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 抽出ロジックの回帰テスト
+        run: python3 scripts/test-transcript-extract.py
+      - name: リポジトリ外を --project で指定したら拒否すること
+        # fail-closed の要。引数ひとつで別案件の transcript を読めてはいけない
+        run: |
+          outside="$(mktemp -d)"
+          if python3 scripts/transcript-extract.py --project "$outside" stats >/dev/null 2>&1; then
+            echo "FAIL: リポジトリ外の --project を受け入れた"
+            exit 1
+          fi
+          echo "ok: リポジトリ外の --project を拒否した"
