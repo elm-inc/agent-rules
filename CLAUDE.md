@@ -81,7 +81,7 @@
 
 **昇格先**: いつ何を使うかの判断 → 本ファイル / ツール横断 (Codex too) の安全原則 → RULES.md / ファイル種別・stack 規約 → `.claude/rules/*.md` / 手順 → skill / 初期構造 → template / なぜ → ADR。**逆方向**: 四半期見直しで参照されない行を降格・削除 (再肥大化防止)。
 
-**会話 craft の記録**: `/devlog` — セッションの会話 (説明・依頼・調整・設計/テストの作り込み) を Claude Code の transcript から蒸留し、**私的 dev-log (`dev-log/`・gitignore) に粒度別** (retro/summary/playbook/excerpt) で残す。会話は消えず transcript に永続化されている。良い型はスクラブして上記台帳経由で昇格。根拠: [`ADR-0016`](docs/adr/0016-devlog-knowledge-capture.md) / 標準: [`docs/design/devlog-standard.md`](docs/design/devlog-standard.md)。
+**会話 craft の記録**: `/devlog` — セッションの会話 (説明・依頼・調整・設計/テストの作り込み) を Claude Code の transcript から蒸留し、**私的 dev-log (`dev-log/`・gitignore) に粒度別** (retro/summary/playbook/excerpt/teach) で残す。`teach` は実際の依頼文を verbatim で見せる教材 (非エンジニア向けオンボーディング)。会話は消えず transcript に永続化されている。良い型はスクラブして上記台帳経由で昇格。根拠: [`ADR-0016`](docs/adr/0016-devlog-knowledge-capture.md) / 標準: [`docs/design/devlog-standard.md`](docs/design/devlog-standard.md)。
 
 ## 並列開発 (git worktree)
 
