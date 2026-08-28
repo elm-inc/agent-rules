@@ -74,7 +74,7 @@ symlink 経由なので、`git pull` した時点で `~/CLAUDE.md` 等の内容�
 
 既に同名のファイル (symlink でない実体) がある場合は WARN を出してスキップする。手動で退避してから再実行する。
 
-`~/.codex/config.toml` はモデル設定、認証状態、プロジェクト trust 設定などの個人・マシン依存情報を含むため、`install.sh` では上書きも symlink 化もしない。共有 MCP 定義や共有 feature flag は `<repo>/.codex/*.config.toml` に置き、Codex 起動時に `--profile-v2 agent-rules` 等を付けて読み込む。
+`~/.codex/config.toml` はモデル設定、認証状態、プロジェクト trust 設定などの個人・マシン依存情報を含むため、`install.sh` では上書きも symlink 化もしない。共有 MCP 定義や共有 feature flag は `<repo>/.codex/*.config.toml` に置き、Codex 起動時に `--profile agent-rules` 等を付けて読み込む。
 
 ---
 
@@ -97,7 +97,7 @@ agent-rules/
 - **`RULES.md`** — Claude Code / Codex CLI 共通の原則 (言語、Git、セキュリティ、禁止事項、テスト等)。`CLAUDE.md` と `AGENTS.md` の冒頭でこのファイルを読むよう指示している
 - **`CLAUDE.md`** — Claude Code 専用の上位ルール。Codex 連携・並列開発・ドキュメント方針などを定義
 - **`AGENTS.md`** — Codex CLI 専用の上位ルール (現状は最小限)
-- **`.codex/*.config.toml`** — Codex CLI の共有 config layer。MCP 定義などを置き、`codex --profile-v2 agent-rules` 等で読み込む
+- **`.codex/*.config.toml`** — Codex CLI の共有 config layer。MCP 定義などを置き、`codex --profile agent-rules` 等で読み込む
 
 ---
 
@@ -108,8 +108,8 @@ agent-rules/
 Codex CLI で共有 config layer も使う場合:
 
 ```bash
-codex --profile-v2 agent-rules
-codex exec --profile-v2 agent-rules "依頼内容"
+codex --profile agent-rules
+codex exec --profile agent-rules "依頼内容"
 ```
 
 MCP を共有管理したい場合は `.codex/agent-rules.config.toml` に `[mcp_servers.<name>]` を追加する。シークレット値は直接書かず、`env_vars = ["TOKEN_NAME"]` や `bearer_token_env_var = "TOKEN_NAME"` で環境変数名だけを共有する。
@@ -120,7 +120,7 @@ Codex 向けの詳細な運用・検証手順は [`docs/setup/codex-cli.md`](doc
 
 | スクリプト | 用途 |
 |---|---|
-| `scripts/codex-agent-rules` | `--profile-v2 agent-rules` 付きで Codex を起動 |
+| `scripts/codex-agent-rules` | `--profile agent-rules` 付きで Codex を起動 |
 | `scripts/codex-doctor.sh` | symlink / TOML / MCP env var / dangling skill link を確認 |
 | `scripts/validate-codex-skills.sh` | Codex skill として最低限の frontmatter を確認 |
 | `scripts/render-codex-config.sh` | profile と MCP fragment を連結して確認 |
@@ -214,11 +214,11 @@ mv ~/CLAUDE.md ~/CLAUDE.md.bak
 - Codex CLI を再起動 (新規スキルは起動時に読み込まれる)
 
 ### Codex の共有 MCP 設定を使いたい
-`~/.codex/agent-rules.config.toml` が symlink になっているか確認し、Codex 実行時に `--profile-v2 agent-rules` を付ける。`--profile-v2` は runtime command 用なので、`codex mcp list` などの管理コマンドには適用されない:
+`~/.codex/agent-rules.config.toml` が symlink になっているか確認し、Codex 実行時に `--profile agent-rules` を付ける。`--profile` は runtime command 用なので、`codex mcp list` などの管理コマンドには適用されない:
 
 ```bash
-codex --profile-v2 agent-rules
-codex exec --profile-v2 agent-rules "MCP が使えるか確認して"
+codex --profile agent-rules
+codex exec --profile agent-rules "MCP が使えるか確認して"
 ```
 
 ### symlink が別の場所を指している

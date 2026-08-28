@@ -4,7 +4,7 @@
 # - Claude skills: ~/.claude/skills/*
 # - Claude subagents: ~/.claude/agents/*
 # - Codex skills: ~/.codex/skills/*
-# - Codex profile-v2 config layers: ~/.codex/*.config.toml
+# - Codex profile config layers: ~/.codex/*.config.toml
 #
 # 使い方:
 #   ./install.sh            symlink を作成/更新 (既存 symlink はスキップ)。従来どおり

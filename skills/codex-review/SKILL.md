@@ -12,12 +12,20 @@ Codex CLI の `review` サブコマンドを使ってコードレビューを実
 
 ## 引数の解釈
 
-`$ARGUMENTS` を以下のルールで解釈する:
+`$ARGUMENTS` を「**スコープ指定**」と「**カスタム指示**」に分けて読む。
+**この 2 つは CLI 側で併用できない** (下の「CLI の制約」参照) ので、解釈もそれを前提にする:
 
 1. **引数なし** → uncommitted な変更（staged + unstaged + untracked）をレビュー
-2. **`--base <branch>`** が含まれる → 指定ブランチとの差分をレビュー
-3. **`--commit <sha>`** が含まれる → 指定コミットの変更をレビュー
-4. **上記以外のテキスト** → カスタムレビュー指示として `codex review` の PROMPT に渡す
+2. **スコープ指定のみ** (`--uncommitted` / `--base <branch>` / `--commit <sha>`)
+   → そのフラグ単独で実行する
+3. **カスタム指示のみ** (フラグを含まないテキスト)
+   → `codex review "<指示>"` で実行する。スコープは **uncommitted 既定**
+4. **両方が混在** (例: `--base main セキュリティ観点で`)
+   → **そのままでは実行できない。組み立てて失敗させないこと。**
+   - `--uncommitted` との混在なら、既定スコープが同じなのでフラグを落として 3 の形にする
+   - `--base` / `--commit` との混在は**どう書いても表現できない**ので、
+     **ユーザーにどちらを優先するか確認する**
+     (指示を捨ててスコープ単独で回すか / スコープを諦めて指示付き uncommitted で回すか)
 
 ## 実行手順
 
@@ -38,12 +46,22 @@ codex review --base main
 # 特定コミットをレビュー
 codex review --commit abc1234
 
-# カスタム指示付きレビュー
-codex review --uncommitted "セキュリティの観点でレビューしてください"
-
-# ブランチ差分 + カスタム指示
-codex review --base main "パフォーマンスへの影響を重点的に確認してください"
+# カスタム指示付きレビュー (スコープは uncommitted 既定。フラグは付けられない)
+codex review "セキュリティの観点でレビューしてください"
 ```
+
+## CLI の制約 (codex-cli 0.149.1 / 2026-08-28 実測)
+
+- **`--uncommitted` / `--base` / `--commit` は 3 つとも PROMPT と併用できない。**
+  渡すと `error: the argument '--uncommitted' cannot be used with '[PROMPT]'` で即失敗する。
+  `Usage: codex review --uncommitted [PROMPT]` と表示されるのに排他という**上流 CLI 側の不整合**
+- 素の `codex review "<指示>"` は動く。スコープは **uncommitted 既定**
+- したがって「カスタム指示 + `--base` / `--commit`」は**現状どう書いても不可能**。
+  ブランチ差分に観点を効かせたいなら、対象をコミットせずワークツリーに出すか、
+  観点を諦めて `--base` 単独で回す
+
+> 上流が直せば併用できるようになる性質の制約なので、**実測バージョンを併記してある**。
+> 挙動が変わっていたらここを更新すること (`codex review --help` で確認)。
 
 ## 注意事項
 

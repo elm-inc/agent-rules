@@ -27,8 +27,8 @@ scripts/codex-doctor.sh
 Use the standard profile when running Codex:
 
 ```bash
-codex --profile-v2 agent-rules
-codex exec --profile-v2 agent-rules "依頼内容"
+codex --profile agent-rules
+codex exec --profile agent-rules "依頼内容"
 ```
 
 The wrapper keeps this shorter:
@@ -47,7 +47,9 @@ scripts/codex-agent-rules exec "依頼内容"
 | `agent-rules-local` | `.codex/agent-rules-local.config.toml` | Local development conventions |
 | `agent-rules-restricted` | `.codex/agent-rules-restricted.config.toml` | Read-only inspection |
 
-`--profile-v2` applies to runtime commands such as `codex`, `codex exec`, `codex review`, `codex resume`, `codex fork`, and `codex debug prompt-input`. It does not apply to management commands such as `codex mcp list`.
+The flag is `-p` / `--profile` (codex-cli 0.149.1; the older `--profile-v2` spelling was removed and now fails with `error: unexpected argument`). A profile name that does not exist is **silently ignored** — Codex starts with defaults instead of failing, so verify the run header shows the settings you expect.
+
+`-p` / `--profile` applies to runtime commands such as `codex`, `codex exec`, `codex review`, `codex resume`, `codex fork`, and `codex debug prompt-input`. It does not apply to management commands such as `codex mcp list`.
 
 ## MCP
 
@@ -89,7 +91,7 @@ codex mcp get linear
 Verify actual tool use with a small read-only request:
 
 ```bash
-codex --profile-v2 agent-rules exec "Linear MCP を使って、自分が参加している Linear team 名を最大3件だけ表示してください。"
+codex --profile agent-rules exec "Linear MCP を使って、自分が参加している Linear team 名を最大3件だけ表示してください。"
 ```
 
 The expected MCP call is `linear/list_teams`. If OAuth expires, rerun `codex mcp login linear`.
@@ -97,16 +99,16 @@ The expected MCP call is `linear/list_teams`. If OAuth expires, rerun `codex mcp
 When starting another Codex session, use the same shared profile:
 
 ```bash
-codex --profile-v2 agent-rules
+codex --profile agent-rules
 ```
 
 If the session says that only a tool such as `multi_agent_v1` is available and Linear tools such as `linear/list_projects`, `linear/get_issue`, or `linear/save_issue` are not visible, first distinguish the two tool layers:
 
 - `codex mcp list` / `codex mcp get linear` checks local Codex CLI MCP registration.
 - The tools exposed directly inside a hosted conversation can be a smaller set and may not list MCP tools even when Codex CLI can use them.
-- `codex --profile-v2 agent-rules exec "Linear MCP ..."` is the reliable end-to-end check for Codex CLI MCP availability.
+- `codex --profile agent-rules exec "Linear MCP ..."` is the reliable end-to-end check for Codex CLI MCP availability.
 
-If `codex exec` can call `linear/list_teams` but an interactive session cannot, restart that session with `codex --profile-v2 agent-rules`. If it still cannot use Linear, capture the startup log and `codex mcp get linear` output; the local registration is then present and the issue is in that session's tool exposure or startup path.
+If `codex exec` can call `linear/list_teams` but an interactive session cannot, restart that session with `codex --profile agent-rules`. If it still cannot use Linear, capture the startup log and `codex mcp get linear` output; the local registration is then present and the issue is in that session's tool exposure or startup path.
 
 ### Codex Apps MCP startup timeout
 
@@ -148,7 +150,7 @@ Before commit:
 
 ```bash
 codex review --uncommitted
-codex --profile-v2 agent-rules-review review --uncommitted
+codex --profile agent-rules-review review --uncommitted
 ```
 
 Review focus:

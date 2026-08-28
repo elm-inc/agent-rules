@@ -11,4 +11,4 @@ if [[ $# -gt 0 ]]; then
     esac
 fi
 
-exec codex --profile-v2 "$PROFILE" "$@"
+exec codex --profile "$PROFILE" "$@"
