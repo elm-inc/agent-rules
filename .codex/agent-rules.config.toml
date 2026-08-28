@@ -1,8 +1,8 @@
 # Shared Codex config layer for agent-rules.
 #
 # Use with:
-#   codex --profile-v2 agent-rules
-#   codex exec --profile-v2 agent-rules "..."
+#   codex --profile agent-rules
+#   codex exec --profile agent-rules "..."
 #
 # Keep machine-local settings such as auth, project trust entries, and personal
 # model defaults in ~/.codex/config.toml. Put shared MCP server definitions or

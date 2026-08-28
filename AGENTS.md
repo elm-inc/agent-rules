@@ -5,7 +5,7 @@
 このファイルは Codex CLI 用の上位ルールである。ツール横断の原則は `~/RULES.md` を正とし、Codex 固有の運用は [`docs/setup/codex-cli.md`](docs/setup/codex-cli.md) を参照する。
 
 ## 起動・設定
-- 通常利用では `codex --profile-v2 agent-rules` を使い、共有 config layer (`~/.codex/agent-rules.config.toml`) を読み込む
+- 通常利用では `codex --profile agent-rules` を使い、共有 config layer (`~/.codex/agent-rules.config.toml`) を読み込む
 - ラッパーを使える環境では `scripts/codex-agent-rules` 経由で起動してよい
 - `~/.codex/config.toml`, `~/.codex/auth.json`, project trust, model default は個人・マシン依存として扱い、Git 管理しない
 - 共有 MCP は `.codex/*.config.toml` または `.codex/mcp/*.toml` に定義し、シークレット値は書かず `env_vars` / `bearer_token_env_var` の環境変数名だけを共有する
