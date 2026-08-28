@@ -32,7 +32,7 @@
 | 高難度実装・設計 (Fable 5 subagent) | `/fable-task` |
 | セカンドオピニオン (Codex) | `/codex-review`・`/codex-task`・`/codex-audit` |
 | テスト観点・実装 / データ / 健全性 | `/test-generate` / `/test-data` / `/mutation-check` |
-| 探索・調査の床 (Haiku subagent) | `explorer` / `researcher` (`~/.claude/agents/`) |
+| 探索・調査の床 (Haiku subagent) | `explorer` / `researcher` (`~/.claude/agents/`)。自発委譲の可否はセッション設定次第 (下記) |
 
 ### モデル使い分け (Opus 5 / Fable 5)
 
@@ -45,7 +45,8 @@
 ### 運用規律・実行方式
 
 - **並列分解は最大 5、>10 は無益** (サブエージェント多用はトークン約 7 倍)。探索・調査は Haiku subagent に、Fable は数少ない難所のみ (**安全原則: サブエージェント規律**)
-- 巨大タスクで網羅性が要る時は決定論的な並列ファンアウト (Workflow: finders→敵対的検証→統合 / loop-until-dry) を明示的に使う。協調が要る独立セッション群は Background Agents / Agent Teams を検討 (worktree 並列の次段)
+- **安全原則 (subagent 委譲は「使えたら使う」)**: セッションによっては Agent ツールの**自発利用が禁止**される (ハーネス側の設定で来るため `settings.json` には現れず、セッションごとに変わりうる)。**禁止を回避しない**。禁止時は自分で探索し、代わりに**読む範囲を絞って**文脈を守る (Grep/Glob で当たりを付けてから必要箇所だけ Read)。委譲した方が明らかに得な場面では**一言提案して許可を取る**。なお `/fable-task`・`/fable-review` など**ユーザーが明示起動するスキルは「依頼」なのでこの制限を受けない** (制限の対象は自発的な spawn)
+- 巨大タスクで網羅性が要る時は決定論的な並列ファンアウト (Workflow: finders→敵対的検証→統合 / loop-until-dry)。ただし **Workflow の起動にはユーザーの明示オプトインが要る** (`ultracode` / 「workflow で」等)。勝手に起動せず、**規模とコストを添えて提案する**。協調が要る独立セッション群は Background Agents / Agent Teams を検討 (worktree 並列の次段)
 - 各レビュー層の所見は **集約→重複排除→重要度ランク付け** してから対処 (敵対的検証)
 
 ### コミット時のフロー (推奨)
