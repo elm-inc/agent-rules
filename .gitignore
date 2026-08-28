@@ -8,3 +8,6 @@ docs/notes/promotion-candidates.md
 # dev-log は私的・ローカル専用 (transcript 由来の機密混入防止・ADR-0016)。README のみ追跡
 dev-log/*
 !dev-log/README.md
+
+# /nano-banana スキルの既定出力先 (成果物をリポに混入させない)
+/nano-banana/

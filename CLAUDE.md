@@ -125,6 +125,7 @@
 各スキルの description は毎セッション自動ロードされるため、ここには**索引 1 行 + 操作時の安全原則**のみ置く (手順は重複させない)。
 
 - **デザイン個性付け** `/design-voice` — median な「AIっぽさ」を意図的バイアスで回避 (`extract`/`use`/`critic`)。根拠 [`ADR-0004`](docs/adr/0004-deliberate-design-bias.md)
+- **画像生成・編集** `/nano-banana` — Nano Banana 2 でテキスト→画像 / 参照画像+指示→編集。文字を含む図版は `--pro`。**安全原則: 生成物は既定で `./nano-banana/` に落ちるのでリポ内実行時は `--outdir` でスクラッチへ逃がす (成果物の混入防止)・`-n` は API を N 回呼ぶので料金が枚数比例・機密案件は `GEMINI_API_KEY=` 明示空で中止する (クラウド送信の非常口)**
 - **shadcn/ui** `/shadcn` (フロントエンド) — 案件に shadcn を標準どおり導入 (init/mcp/公式skill監査導入/rule配置/@elm/base 配線)。**自作せず公式を配線** (MCP は per-project・global 登録しない / 公式スキルは監査後 add / house-style は `/design-voice`・design-registry と連結)。詳細: [`docs/setup/shadcn.md`](docs/setup/shadcn.md) / 根拠 [`ADR-0014`](docs/adr/0014-shadcn-design-registry.md)
 - **Figma** `/figma` — 画像取込・design tokens 抽出・画像一括書き出し (REST)。対話的コード化は別経路のリモート MCP。**安全原則: Figma API を生 curl で叩かない (レート制御は必ず `/figma` 経由)・PAT/OAuth の 2 経路を混同しない・ローカル MCP は Linux 不可**。導入は [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)
 - **New Relic** `/newrelic` — 案件=別顧客テナント (取り違え=顧客データ混線、gh `_chd` 事故と同型)。**安全原則: いまどの顧客アカウントかを常に明示・検証可能にし暗黙の既定に倒さない (fail-closed)・New Relic MCP は global 登録しない・`.newrelic-profile`/`.envrc` は commit しない・鍵は argv に出さない**。接続後は `/newrelic doctor` で三者一致を検証。根拠 [`ADR-0008`](docs/adr/0008-newrelic-connection-hybrid.md) / 導入 [`docs/setup/mcp-servers.md`](docs/setup/mcp-servers.md)

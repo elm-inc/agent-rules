@@ -14,7 +14,7 @@
 #
 # 四半期見直し: 次回 2026-11
 
-updated: 2026-08-17
+updated: 2026-08-28
 
 # --- 稼働中のモデル -------------------------------------------------------
 active:
@@ -101,6 +101,26 @@ active:
     note: >-
       Codex CLI が既定モデルを管理するため ID を固定しない (2026-07-09 以降の既定は
       GPT-5.6 Sol)。スキル側も `codex review` / `codex exec` を呼ぶだけで --model を渡さない
+
+  # 画像生成・編集 (テキスト→画像 / 参照画像+指示→画像)
+  - key: image
+    vendor: gemini
+    id: gemini-3.1-flash-image
+    layer: 画像生成
+    note: >-
+      API displayName は "Nano Banana 2"。generateContent で生成と編集の両方を扱い、
+      画像は inlineData に base64 で返る。skills/nano-banana が既定で使用。
+      -preview 版も併存するが GA 版を採る (2026-08-28 に /v1beta/models で実在確認)
+
+  # 画像生成・編集 (高品質・文字描画に強い上位)
+  - key: image_pro
+    vendor: gemini
+    id: gemini-3-pro-image
+    layer: 画像生成
+    note: >-
+      API displayName は "Nano Banana Pro"。/nano-banana --pro で選択。
+      文字を含む図版や納品物向け。初代 gemini-2.5-flash-image ("Nano Banana") は
+      本リポでは未使用
 
 # --- 退役・移行済み -------------------------------------------------------
 # operational surface (skills/ scripts/ CLAUDE.md) にこれらが現れたら CI が落とす。
