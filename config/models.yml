@@ -14,7 +14,7 @@
 #
 # 四半期見直し: 次回 2026-11
 
-updated: 2026-08-28
+updated: 2026-09-06
 
 # --- 稼働中のモデル -------------------------------------------------------
 active:
@@ -28,9 +28,16 @@ active:
   # 最後の砦 (高リスク変更のみ・subagent 委譲)
   - key: escalation
     vendor: anthropic
-    id: claude-fable-5
+    id: claude-fable-5-1
     layer: 最後の砦
-    note: "$10/$50 per MTok = Opus 5 の 2 倍。ADR-0010 の課金規律が適用される"
+    note: >-
+      $10/$50 per MTok = Opus 5 の 2 倍 (Fable 5 と同額)。cache read $0.25/MTok。
+      ADR-0019 のフロンティア枠課金規律が適用される。
+      **Agent tool の `model: "fable"` エイリアスは既に本 ID に解決される** (2026-09-06 に
+      subagent 自己申告で確認)。スキル側は引き続きエイリアスを使うため ID 直書きはしないが、
+      「実際に何が走っているか」を台帳に記録する意味でここに置く。
+      Fable 5 からの破壊的変更: forced tool_choice (any/tool) が 400 /
+      thinking block が生成モデルに束縛される / 履歴編集で thinking が無効化される (append-only 必須)。
 
   # 探索・調査サブエージェントの床
   - key: explorer
@@ -100,7 +107,24 @@ active:
     layer: 多様性
     note: >-
       Codex CLI が既定モデルを管理するため ID を固定しない (2026-07-09 以降の既定は
-      GPT-5.6 Sol)。スキル側も `codex review` / `codex exec` を呼ぶだけで --model を渡さない
+      GPT-5.6 Sol)。スキル側も `codex review` / `codex exec` を呼ぶだけで --model を渡さない。
+      高リスク差分で明示的に上位を使う場合のみ `--model gpt-6-astra` (下の frontier_diversity)
+
+  # 多様性層のフロンティア級 (高リスク変更時のみ・異ベンダー独立視点)
+  - key: frontier_diversity
+    vendor: openai
+    id: gpt-6-astra
+    layer: 多様性
+    note: >-
+      GPT-6 Astra (2026-09-03 公開)。$10/$50 per MTok = Fable 5.1 と同額・Opus 5 の 2 倍。
+      cache read $1/MTok。**入力 272K 超で input 2x / output 1.5x** になるため
+      リポ横断 (1M context) 用途では Gemini より高い — 横断は `/gemini-review` に残す。
+      context 1,050,000 tok / 出力 128,000 tok。
+      2026-09-06 に本機から実測確認: reasoning.effort は low|medium|high|xhigh|max のみ
+      (`none` は 400)、temperature/top_p は非サポート (400)、Chat Completions と
+      Responses の両方に応答する。
+      **Codex CLI 0.153.4 以上が必要** — 0.149.1 は server-side で 400
+      ("requires a newer version of Codex") を返す。根拠: ADR-0019
 
   # 画像生成・編集 (テキスト→画像 / 参照画像+指示→画像)
   - key: image
@@ -143,6 +167,10 @@ retired:
     vendor: anthropic
     successor: claude-opus-5
     status: active_upstream  # 上流では現役。本リポの既定から外しただけ
+  - id: claude-fable-5
+    vendor: anthropic
+    successor: claude-fable-5-1
+    status: active_upstream  # 上流では現役。`model: "fable"` が 5.1 を指すため既定から外した
   - id: RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic
     vendor: huggingface
     successor: cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit

@@ -1,9 +1,9 @@
 # AI 開発ワークフロー (多層・多モデル) 設計
 
 - Linear Project: [AI 開発ワークフロー多層化](https://linear.app/elm-inc/project/ai-開発ワークフロー多層化-5d5bc734ffcd)
-- ADR: [0017-ai-workflow-model-refresh-and-review-layers](../adr/0017-ai-workflow-model-refresh-and-review-layers.md) (2026-08-17 に [0001](../adr/0001-multi-llm-development-workflow.md) を Supersede)
-- 制定日: 2026-05-22 / 最終棚卸し: **2026-08-17**
-- 状態: **運用中。2026-08 棚卸しでモデル刷新・レビュー 4 層集約・モデル台帳導入**
+- ADR: [0017-ai-workflow-model-refresh-and-review-layers](../adr/0017-ai-workflow-model-refresh-and-review-layers.md) (2026-08-17 に [0001](../adr/0001-multi-llm-development-workflow.md) を Supersede) / [0019-frontier-tier-orchestration](../adr/0019-frontier-tier-orchestration.md) (2026-09-06)
+- 制定日: 2026-05-22 / 最終棚卸し: **2026-09-06**
+- 状態: **運用中。2026-09 に フロンティア層 (Fable 5.1 / GPT-6 Astra) を導入**
 
 ## 1. 背景・目的
 
@@ -19,14 +19,15 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 
 | 層 | ロール | モデル / ツール | スキル | 採用理由 |
 |---|---|---|---|---|
-| — | 実装 (主) | Claude Opus 5 (要所は Fable 5) | (Claude Code 本体) | 長文推論・コード横断。Opus 4.8 と同価格で能力向上 |
+| — | 実装 (主) | Claude Opus 5 (要所は Fable 5.1) | (Claude Code 本体) | 長文推論・コード横断。Opus 4.8 と同価格で能力向上 |
 | 床 (LLM) | 0 次レビュー | ローカル Qwen3-Coder-30B-A3B (vLLM/AWQ 4bit) | `/local-review` | コスト 0、機密データ送信不要、無制限。**199 tok/s**。機密案件は必須 / 公開リポは任意 (§4-1) |
 | 床 | 探索・調査 | Claude Haiku 4.5 (+ 重い探索は Sonnet 5) | `explorer` / `researcher` | 司令塔の文脈とコストを節約 (ADR-0006) |
 | 多様性 | セカンドオピニオン | Codex (既定 GPT-5.6 Sol) | `/codex-review` 他 | Anthropic と別ベンダー、修正提案が具体的。ID は Codex CLI 管理 |
+| 多様性 (高リスク) | フロンティア級の異ベンダー | **GPT-6 Astra** | `/codex-review --astra` | 砦 (Fable 5.1) と同格の非 Anthropic。実費 $10/$50。ADR-0019 |
 | 多様性 | 設計レッドチーム | DeepSeek V4-Pro (思考モード) | `/deepseek-redteam` | 別学習系統で深い問題発見、1 回 2 円前後 |
 | 多様性 | リポ横断 | Gemini 3.1 Pro (入力 1M) | `/gemini-review` | cross-file 視点で唯一無二の指摘 |
 | 深さ | 敵対的検証 | ハーネス標準 (Claude) | `/code-review` | 指摘を検証して絞る。**多様性は解けない** |
-| 砦 | 最終レビュー | Claude Fable 5 | `/fable-review` | 高リスク変更のみ (ADR-0010 の課金規律) |
+| 砦 | 最終レビュー | Claude Fable 5.1 | `/fable-review` | 高リスク変更のみ (ADR-0010 → 0019 のフロンティア枠規律) |
 | — | テスト観点抽出 | DeepSeek V4-Flash + ローカル Qwen (+ 任意で Gemini) | `/test-generate --brainstorm` | 拡散的タスク、多モデルで観点カバレッジ向上 |
 | — | テスト実装 / データ | ローカル Qwen | `/test-generate --implement` / `/test-data` | 収束的、単一モデルで十分。コスト 0 |
 | — | テスト品質検証 | mutmut / Stryker | `/mutation-check` | AI 生成テストの tautology を機械検出 |
@@ -41,7 +42,7 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
    └→ (任意) /codex-audit で実装視点ツッコミ
 
 [実装]
-  Claude Opus 5 で実装 (高難度は Fable 5 委譲)
+  Claude Opus 5 で実装 (高難度は Fable 5.1 委譲)
 
 [コミット前]  ← 4 層。上から順に、必要な層だけ回す (ADR-0017)
   床      /local-review + pre-commit (型/lint/semgrep)   ← 常時。秒オーダー・0 円
@@ -49,18 +50,22 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
   多様性  異ベンダーを 1 つだけ選ぶ:
             設計を疑う      → /deepseek-redteam
             10+ファイル/drift → /gemini-review
-            実装視点         → /codex-review
+            実装視点         → /codex-review           (GPT-5.6 Sol)
+            ★高リスク       → /codex-review --astra   (GPT-6 Astra・実費)
   深さ    /code-review                                   ← 敵対的検証で指摘を絞る
-  砦      /fable-review                                  ← 高リスク変更のみ
+  砦      /fable-review                                  ← 高リスク変更のみ (Fable 5.1)
 
   ※ 高リスク変更では「多様性」を省略しない。深さ・砦はどちらも Claude 系なので、
-     省くと異ベンダーの独立視点がゼロになる (ADR-0017 レッドチーム指摘)
+     省くと異ベンダーの独立視点がゼロになる (ADR-0017 レッドチーム指摘)。
+     さらに高リスク時は多様性層を Astra に【格上げ】する — 砦と同格の非 Anthropic を
+     当てて初めて独立視点が砦と釣り合う (ADR-0019)。格上げであって追加ではないので、
+     異ベンダーは依然 1 つまで
 
 [実行検証]
   /verify, E2E テスト
 ```
 
-軽微な変更では `/local-review` + pre-commit のみで十分。`/gemini-review` は 10+ ファイル変更や ADR drift 疑い時のみ。`/fable-review` はセキュリティ・課金・データ破壊・公開 API・並行処理などの高リスク変更のみ (条件表: `skills/fable-review/SKILL.md`)。
+軽微な変更では `/local-review` + pre-commit のみで十分。`/gemini-review` は 10+ ファイル変更や ADR drift 疑い時のみ。`/fable-review` はセキュリティ・課金・データ破壊・公開 API・並行処理などの高リスク変更のみ (条件表: `skills/fable-review/SKILL.md`)。**リポ横断は Astra に投げない** — 入力 272K 超で input 2x / output 1.5x になるため、1M context を使う横断は `/gemini-review` に残す。フロンティア層は「広さ」ではなく「深さ」に使う (ADR-0019)。
 
 ### 検証ループ recipe (verification / adversarial) — 2026-08 トレンド取り込み
 
@@ -260,17 +265,25 @@ ADR-0001 が想定していたのは「LLM の出力品質が落ちる」リス�
 
 ### 月別コスト集計
 
-`scripts/track-cost.sh` で集計 (Phase 6 雛形)。**Fable 5 は `scripts/fable-usage.sh` が transcript から自動集計** (**2026-07-20〜** 従量課金。07-23 訂正: Max は週次上限 50% まで included 恒久・超過分のみ実費。予算 $100/月 = included 超過分への予算・開発者1人。根拠: ADR-0010 [07-23 改訂])。
+`scripts/track-cost.sh` で集計 (Phase 6 雛形)。**フロンティア層 (Fable 5.1 + GPT-6 Astra) は `scripts/frontier-usage.sh` が自動集計**し、statusline に `🧠FR` として常時表示する。予算 **$100/月は 2 モデル共有** (`FRONTIER_BUDGET_USD`)。根拠: ADR-0010 → [ADR-0019](../adr/0019-frontier-tier-orchestration.md)。
 
-> ⚠️ **included の注意 (2026-07-23 訂正)**: Fable 5 は Max プランでは**週次上限の 50% までの included アクセスが恒久化**され、超過分のみ実費 (usage credits、7/20 開始)。included 消費はローカルから観測できないため、`fable-usage.sh` は全トークンを課金対象とみなす**上限見積り** (実費 ≤ 表示値)。実費の正は Console。
+> ⚠️ **2 つのフロンティアは課金も計測も非対称。同じ数字として読まない** (ADR-0019 §5):
+>
+> | | included | ローカル計測 | 表示の意味 |
+> |---|---|---|---|
+> | **Fable 5.1** | Max は週次上限の 50% まで (恒久)、超過分のみ実費 | transcript の `usage` を実測 | included 未考慮の**上限見積り** (実費 ≤ 表示値) |
+> | **GPT-6 Astra** | **無し (全量実費)** | Codex が別プロセスのため transcript に残らない。usage API は admin scope 必須で通常キーは 403 | `codex-astra.sh` の**呼び出し台帳**。トークン不明の回は未計上 = **下限** (statusline の `+`) |
+>
+> 実費の正は Console ([Anthropic](https://console.anthropic.com/settings/usage) / [OpenAI](https://platform.openai.com/usage))。
 
-| 月 | Fable 5 | Gemini | DeepSeek | 合計 |
-|---|---|---|---|---|
-| 2026-05 | — | TBD | TBD | TBD |
-| 2026-06 | ~$595 ⚠️ | TBD | TBD | TBD |
-| 2026-07 | TBD (7/1-19 included / **7/20〜 従量課金**) | TBD | TBD | TBD |
+| 月 | Fable | Astra | Gemini | DeepSeek | 合計 |
+|---|---|---|---|---|---|
+| 2026-05 | — | — | TBD | TBD | TBD |
+| 2026-06 | ~$595 ⚠️ | — | TBD | TBD | TBD |
+| 2026-07 | TBD (7/1-19 included / **7/20〜 従量課金**) | — | TBD | TBD | TBD |
+| 2026-09 | 導入初月 (計測中) | 導入初月 (計測中) | TBD | TBD | TBD |
 
-> **⚠️ 2026-06 の Fable ~$595 は約 3 日 (6/10〜6/13、6/12 の利用停止まで) の複数プロジェクト横断利用による実測** (`fable-usage.sh --month 2026-06`)。予算 $100/月なら 1 日で超過する規模で、厳選 + モニタリング (ADR-0010) の必要性を裏付ける実データ。7/20 以降は included (週次上限の 50%) を超えた分が実費として請求される。
+> **⚠️ 2026-06 の Fable ~$595 は約 3 日 (6/10〜6/13、6/12 の利用停止まで) の複数プロジェクト横断利用による実測** (`frontier-usage.sh --month 2026-06`)。予算 $100/月なら 1 日で超過する規模で、厳選 + モニタリング (ADR-0010) の必要性を裏付ける実データ。7/20 以降は included (週次上限の 50%) を超えた分が実費として請求される。
 
 ### ROI 判定
 

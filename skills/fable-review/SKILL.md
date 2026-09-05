@@ -1,18 +1,18 @@
 ---
 name: fable-review
-description: Claude Fable 5 (最上位モデル) のサブエージェントによる最高精度レビュー。セキュリティ・データ破壊・課金に関わる変更や、大規模リファクタの最終レビューに使用。日常レビューは /local-review → /codex-review で行い、本スキルは「最後の砦」に限定する
+description: Claude Fable 5.1 (最上位モデル) のサブエージェントによる最高精度レビュー。セキュリティ・データ破壊・課金に関わる変更や、大規模リファクタの最終レビューに使用。日常レビューは /local-review → /codex-review で行い、本スキルは「最後の砦」に限定する
 argument-hint: "[レビュー対象や追加指示（例: --base main, セキュリティ観点で）]"
 disable-model-invocation: false
 allowed-tools: Agent Bash(git *) Bash(cat *) Read
 ---
 
-# Fable 5 による最終レビュー
+# Fable 5.1 による最終レビュー
 
-セッションモデル (通常 Opus 5) はそのままに、**Fable 5 のサブエージェント**を起動してレビューだけを委譲する。セッション全体を Fable に切り替えるよりトークン消費を抑えられ、レビュー側は汚れていない独立コンテキストで差分を読める。
+セッションモデル (通常 Opus 5) はそのままに、**Fable 5.1 のサブエージェント**を起動してレビューだけを委譲する。セッション全体を Fable に切り替えるよりトークン消費を抑えられ、レビュー側は汚れていない独立コンテキストで差分を読める。
 
 ## コスト前提 (乱用しない)
 
-> 💰 **2026-07-20〜 従量課金 (07-23 訂正)**: Fable 5 は $10/$50 per MTok (Opus 5 の 2 倍)。Max プランは**週次上限の 50% まで included (恒久)、超過分のみ実費 (ドル)**。`scripts/fable-usage.sh` の当月 $ は included 未考慮の**上限見積り** (実費の正は Console)。予算 (既定 $100/月 = included 超過分への予算) 超過後は起動前に要否を都度確認する (人手ゲート・ブロックはしない)。根拠: [ADR-0010](../../docs/adr/0010-fable-metered-billing-controls.md) (07-23 改訂)。
+> 💰 **フロンティア枠のコスト規律**: Fable 5.1 は $10/$50 per MTok (Opus 5 の 2 倍。Fable 5 から据え置き)。Max プランは**週次上限の 50% まで included (恒久)、超過分のみ実費 (ドル)**。`scripts/frontier-usage.sh` の当月 $ は included 未考慮の**上限見積り** (実費の正は Console)。**予算 $100/月は GPT-6 Astra と共有のフロンティア枠**なので、Astra を回した月は Fable の余裕が減る。超過後は起動前に要否を都度確認する (人手ゲート・ブロックはしない)。根拠: [ADR-0010](../../docs/adr/0010-fable-metered-billing-controls.md) → [ADR-0019](../../docs/adr/0019-frontier-tier-orchestration.md)。
 
 日常の差分は `/local-review` → `/codex-review` で回し、本スキルは「品質が下流に大きく波及する変更の最終レビュー」= **最後の砦**に限定する。以下に該当する変更で使う:
 
@@ -40,7 +40,7 @@ allowed-tools: Agent Bash(git *) Bash(cat *) Read
    git diff <base>...HEAD      # --base 指定時
    git show <sha>              # --commit 指定時
    ```
-2. **Agent ツールでサブエージェントを `model: "fable"` で起動する**
+2. **Agent ツールでサブエージェントを `model: "fable"` で起動する** (このエイリアスは `claude-fable-5-1` に解決される)
    - subagent_type: `general-purpose` (code-reviewer 系エージェントが定義されていればそちらを優先)
    - プロンプトには以下を含める:
      - 作業ディレクトリと diff の取得コマンド (diff が長い場合はファイルパスを渡し、サブエージェント側で読ませる)
@@ -55,3 +55,4 @@ allowed-tools: Agent Bash(git *) Bash(cat *) Read
 - レビュー実行前に最終レビュー委譲を一言宣言する (対象条件のどれに該当するかを添える)
 - diff が空の場合はその旨を伝えて終了する
 - 他のレビュースキルの代替ではなく追加の最終段。`/local-review` や `/codex-review` をスキップする理由にはしない
+- **本スキルは Claude 系なので、単独では異ベンダーの独立視点がゼロになる**。本スキルを起動するような高リスク変更では、多様性層をフロンティア級で併用する (`/codex-review --astra`)。根拠: ADR-0017 のレッドチーム指摘 / ADR-0019
