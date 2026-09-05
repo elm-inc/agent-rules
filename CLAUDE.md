@@ -15,11 +15,11 @@
 |---|---|---|---|
 | **床 (機械)** | 決定論的に取れるものを 0 円で取る | pre-commit (ruff/mypy/semgrep) | **常時・必須** |
 | **床 (LLM)** | 意図と実装の食い違いを独立視点で見る | `/local-review` | **機密案件は必須** / 公開リポは任意 |
-| **多様性** | groupthink 回避 | **異ベンダーを 1 つだけ**: 設計 → `/deepseek-redteam` / 横断 → `/gemini-review` / 実装視点 → `/codex-review` | 差分の性質で選ぶ |
+| **多様性** | groupthink 回避 | **異ベンダーを 1 つだけ**: 設計 → `/deepseek-redteam` / 横断 → `/gemini-review` / 実装視点 → `/codex-review`<br>**高リスクはフロンティア級に格上げ** → `/codex-review --astra` (GPT-6 Astra・実費) | 差分の性質で選ぶ |
 | **深さ** | 指摘を敵対的に検証して絞る | `/code-review` (巨大タスクは Workflow ファンアウト) | 品質を上げたいとき |
-| **最後の砦** | 下流への波及が大きい変更 | `/fable-review` | 高リスク変更のみ |
+| **最後の砦** | 下流への波及が大きい変更 | `/fable-review` (Fable 5.1) | 高リスク変更のみ |
 
-**高リスク変更 (セキュリティ・課金・データ破壊・公開 API・並行処理) では「多様性」層を省略しない。** `/code-review` も `/fable-review` も Claude 系なので、砦だけ通すと異ベンダーの独立視点がゼロになる。
+**高リスク変更 (セキュリティ・課金・データ破壊・公開 API・並行処理) では「多様性」層を省略しない。** `/code-review` も `/fable-review` も Claude 系なので、砦だけ通すと異ベンダーの独立視点がゼロになる。**この局面の多様性層は `/codex-review --astra` (GPT-6 Astra) に格上げする** — 砦 (Fable 5.1) と同格の非 Anthropic を当てて初めて、独立視点が砦と釣り合う (ADR-0019)。
 
 > **床は機械と LLM の 2 本立てで、どちらも単独では穴が残る** (2026-08-17 実測: [`docs/design/ai-workflow.md`](docs/design/ai-workflow.md) §4-1)。linter は「ファイル未 close」を数ミリ秒で取るが**意味的バグは全ルールで 0 件**。LLM は off-by-one・lock 範囲・変数同士の `is` を取るが「未 close」は 6/6 見逃した。**和集合で初めて全件**になる。
 >
@@ -29,22 +29,32 @@
 
 | その他のロール | スキル |
 |---|---|
-| 高難度実装・設計 (Fable 5 subagent) | `/fable-task` |
-| セカンドオピニオン (Codex) | `/codex-review`・`/codex-task`・`/codex-audit` |
+| 高難度実装・設計 (Fable 5.1 subagent) | `/fable-task` |
+| セカンドオピニオン (Codex = GPT-5.6 Sol) | `/codex-review`・`/codex-task`・`/codex-audit` |
+| 高リスク差分の異ベンダー検証 (GPT-6 Astra・実費) | `/codex-review --astra` |
 | テスト観点・実装 / データ / 健全性 | `/test-generate` / `/test-data` / `/mutation-check` |
 | 探索・調査の床 (Haiku subagent) | `explorer` / `researcher` (`~/.claude/agents/`) |
 
-### モデル使い分け (Opus 5 / Fable 5)
+### モデル使い分け (Opus 5 / Fable 5.1 / GPT-6 Astra)
 
-常用は **Opus 5**。**Fable 5** は「**手戻り・正しさ・品質が下流に大きく波及するか**」を物差しに、価値が高い局面で subagent 委譲する (委譲前に一言宣言し「なぜ Opus では不足か」を 1 行添える)。局所的・機械的・低リスクなタスクは Opus のまま。使いどころの条件表は各 SKILL.md (`/fable-task` = 設計/難実装/調査/品質引き上げ、`/fable-review` = セキュリティ・課金・公開 API・並行処理などの高リスク変更に限定)。セッション全体を Fable にするのは単発・完全自律の超高難度ミッションのみ (`/model fable`)。**Opus 5 は 4.8 と同価格で能力が上がったため、Fable に投げる閾値は以前より高く取る** (まず Opus 5 を effort 高めで試す)。
+常用は **Opus 5**。**フロンティア級 (Fable 5.1 / GPT-6 Astra — どちらも $10/$50 per MTok = Opus の 2 倍)** は「**手戻り・正しさ・品質が下流に大きく波及するか**」を物差しに、価値が高い局面だけで使う (起動前に一言宣言し「なぜ Opus では不足か」を 1 行添える)。局所的・機械的・低リスクなタスクは Opus のまま。**Opus 5 は 4.8 と同価格で能力が上がったため、フロンティアに投げる閾値は以前より高く取る** (まず Opus 5 を effort 高めで試す)。
+
+**2 つのフロンティアの使い分けは「同じベンダーか否か」で決める**:
+
+- **Fable 5.1** (`/fable-task` / `/fable-review`) — **作る側・深める側**。設計/難実装/調査/品質引き上げ、および高リスク変更の最終レビュー。セッション全体を Fable にするのは単発・完全自律の超高難度ミッションのみ (`/model fable`)
+- **GPT-6 Astra** (`/codex-review --astra`) — **疑う側**。Claude 系が作ったものを非 Anthropic の目で検証する。実装/設計が Claude 由来である以上、砦を Claude で固めても groupthink は解けない
+
+条件表は各 SKILL.md にある。
 
 > 🔒 **安全原則 (モデル ID は台帳が単一ソース)**: スキル/スクリプトにモデル ID を直書きしない。[`config/models.yml`](config/models.yml) を先に更新し `bash scripts/model-doctor.sh` を通す。**ベンダーは黙ってモデルを消す** — `deepseek-reasoner` の退役に 3 週間気づけず `/deepseek-redteam` が壊れたままだった事故の再発防止 (ADR-0017)。CI (`model-drift.yml`) が drift を落とす。 <!-- model-doctor:allow (事故の説明として言及) -->
 
-> 💰 **安全原則 (Fable コスト規律・従量課金 2026-07-20〜)**: Fable 5 は Max では**週次上限の 50% まで included (恒久)、超過分のみ実費** ($10/$50 per MTok = Opus の 2 倍)。included 枠があっても「余っているから念のため Fable」は不成立 (Opus 等と週次上限を食い合う)。**1 タスク 1 委譲 (往復＝追加実費)・委譲前宣言・statusline 監視**を徹底。当月 $ は `scripts/fable-usage.sh` が集計し statusline に常時表示 (included 未考慮の上限見積り・実費の正は Console。予算 $100/月 = 超過分への予算)。超過後も止めないが起動前に要否を都度確認 (人手ゲート)。根拠: [`docs/adr/0010`](docs/adr/0010-fable-metered-billing-controls.md) (07-23 改訂)
+> 💰 **安全原則 (フロンティア枠のコスト規律)**: Fable 5.1 と GPT-6 Astra は**同額 ($10/$50 per MTok = Opus の 2 倍)** で、**$100/月の 1 つの予算を共有**する (`FRONTIER_BUDGET_USD`)。**1 タスク 1 委譲 (往復＝追加実費)・起動前宣言・statusline 監視**を徹底。当月 $ は `scripts/frontier-usage.sh` が集計し statusline に `🧠FR` として常時表示。超過後も止めないが起動前に要否を都度確認 (人手ゲート)。根拠: [`docs/adr/0010`](docs/adr/0010-fable-metered-billing-controls.md) → [`docs/adr/0019`](docs/adr/0019-frontier-tier-orchestration.md)
+>
+> **2 つは課金も計測も非対称**なので、同じ数字として読まない: **Fable** は Max の週次上限 50% まで included (恒久)・超過分のみ実費で、transcript から実測できる (表示は included 未考慮の**上限見積り**)。**Astra** は included 枠が無く**全量実費**、しかも Codex CLI が別プロセスで走るため transcript に残らず、OpenAI の usage API は admin scope が要る — `codex-astra.sh` が残す**呼び出し台帳**が唯一の計器で、トークン数を拾えない回は未計上 (statusline の `+` が「表示値は下限」の印)。**Astra は入力 272K 超で input 2x / output 1.5x** になるため、リポ横断は `/gemini-review` に残す。
 
 ### 運用規律・実行方式
 
-- **並列分解は最大 5、>10 は無益** (サブエージェント多用はトークン約 7 倍)。探索・調査は Haiku subagent に、Fable は数少ない難所のみ (**安全原則: サブエージェント規律**)
+- **並列分解は最大 5、>10 は無益** (サブエージェント多用はトークン約 7 倍)。探索・調査は Haiku subagent に、フロンティア級 (Fable 5.1 / Astra) は数少ない難所のみ (**安全原則: サブエージェント規律**)
 - 巨大タスクで網羅性が要る時は決定論的な並列ファンアウト (Workflow: finders→敵対的検証→統合 / loop-until-dry) を明示的に使う。協調が要る独立セッション群は Background Agents / Agent Teams を検討 (worktree 並列の次段)
 - 各レビュー層の所見は **集約→重複排除→重要度ランク付け** してから対処 (敵対的検証)
 
@@ -52,18 +62,19 @@
 
 ```
 [設計] docs/design/foo.md 起草 (受け入れ基準 + 検証手段付き) → /deepseek-redteam
-[実装] Opus 5 (高難度は /fable-task で Fable 5 委譲)
+[実装] Opus 5 (高難度は /fable-task で Fable 5.1 委譲)
 [コミット前] 床(機械): pre-commit (ruff/mypy/semgrep)          ← 常時・必須
              床(LLM):  /local-review — 機密案件は必須 / 公開リポは任意
                        (必要時) /test-generate
              多様性: 異ベンダーを 1 つ選ぶ
                      設計を疑う→/deepseek-redteam / 10+ファイル・ADR drift→/gemini-review
                      実装視点→/codex-review
+                     ★高リスクなら→/codex-review --astra (GPT-6 Astra・実費)
              深さ:   /code-review (敵対的検証)
-             砦:     /fable-review (高リスク変更のみ)
+             砦:     /fable-review (高リスク変更のみ / Fable 5.1)
 [実行検証] /verify, /run, E2E (UI はスクショ)
 ```
-軽微な変更では **床のみ**で十分。機械層 (pre-commit) は常時必須、LLM 層は文脈で判断する。多様性と深さは毎回回さない。
+軽微な変更では **床のみ**で十分。機械層 (pre-commit) は常時必須、LLM 層は文脈で判断する。多様性と深さは毎回回さない。**フロンティア級 (`--astra` / `/fable-review`) は高リスク変更に限る** — 2 つ揃えると 1 差分で $10/$50 級を 2 回払う。
 
 > **安全原則 (vLLM は停止が既定)**: ローカル LLM (vLLM) は普段停止しているのが正常 (オンデマンド起動)。`/local-review`・`/test-generate`・`/test-data` は `ensure-vllm.sh` で自動起動する (初回 1-2 分・アイドル 15 分で自動停止。現行モデル: Qwen3-Coder-30B-A3B AWQ4bit)。**「vLLM が停止しているのでローカルレビューを中止」は誤り** — 停止は既定状態であって利用不可ではない。自前で `:8000` を叩いて落ちていても中止せずスキル経由で起動して続行。本当に起動不可 (GPU 専有等) のときのみ `/codex-review` に切替。根拠: [`docs/adr/0005`](docs/adr/0005-on-demand-local-llm.md) / セットアップ: [`docs/setup/local-llm.md`](docs/setup/local-llm.md)
 

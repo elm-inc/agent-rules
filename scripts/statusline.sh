@@ -52,18 +52,25 @@ if [ -n "$ctx" ]; then out="${out}${S}ctx ${ctx%.*}%"; else out="${out}${S}ctx $
 out="${out}${S}5h $(colpct "$five")${DIM} / ${RST}7d $(colpct "$seven")"
 out="${out}${S}${vllm}"
 
-# Fable 当月実費 (従量課金の計器)。fable-usage.sh がキャッシュから即返す (重い走査は裏で throttle)。
-# Fable を当月使っていなければ (実費 0) 表示しない — 平時はステータスラインを汚さない。
-fu="$(dirname "${BASH_SOURCE[0]}")/fable-usage.sh"
-[ -x "$fu" ] || fu="$HOME/repos/github.com/elm-inc/agent-rules/scripts/fable-usage.sh"
+# フロンティア層 (Fable 5.1 + GPT-6 Astra) の当月実費。frontier-usage.sh がキャッシュから
+# 即返す (重い走査は裏で throttle)。当月使っていなければ (実費 0) 表示しない — 平時は汚さない。
+# 第3フィールド: "+" = 未計上の呼び出しがあり表示値は【下限】 / "?" = そもそも計測不能。
+fu="$(dirname "${BASH_SOURCE[0]}")/frontier-usage.sh"
+[ -x "$fu" ] || fu="$HOME/repos/github.com/elm-inc/agent-rules/scripts/frontier-usage.sh"
 if [ -x "$fu" ]; then
-  read -r fcost fbudget < <("$fu" --statusline 2>/dev/null)
-  if [ -n "${fcost:-}" ] && [ "$fcost" != "NA" ] && [ "${fcost:-0}" -gt 0 ] 2>/dev/null; then
+  read -r fcost fbudget fflag < <("$fu" --statusline 2>/dev/null)
+  # "?" = 計測不能。**黙って隠すと「今月は使っていない」と区別が付かない**ので明示する
+  # (計器が壊れていることを 0 と誤読させない — ADR-0019 のレッドチーム指摘)
+  if [ "${fflag:--}" = "?" ]; then
+    out="${out}${S}🧠FR ${YEL}?${RST}"
+  elif [ -n "${fcost:-}" ] && [ "$fcost" != "NA" ] \
+       && { [ "${fcost:-0}" -gt 0 ] 2>/dev/null || [ "${fflag:--}" = "+" ]; }; then
     fpct=0; [ "${fbudget:-0}" -gt 0 ] 2>/dev/null && fpct=$(( fcost * 100 / fbudget ))
     if   [ "$fpct" -ge 100 ]; then fc="$RED"
     elif [ "$fpct" -ge 70 ];  then fc="$YEL"
     else                           fc="$GRN"; fi
-    out="${out}${S}🧠F ${fc}\$${fcost}${RST}${DIM}/${fbudget}${RST}"
+    fmark=""; [ "${fflag:--}" = "+" ] && fmark="+"
+    out="${out}${S}🧠FR ${fc}\$${fcost}${fmark}${RST}${DIM}/${fbudget}${RST}"
   fi
 fi
 
