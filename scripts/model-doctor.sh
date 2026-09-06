@@ -78,14 +78,52 @@ run_drift() {
   # 除外: 台帳そのものと、パターン定義を持つ本スクリプト (自己言及で誤検知するため)
   local excludes=(--exclude-dir=.git --exclude=models.yml --exclude=model-doctor.sh)
 
+  # 走査するファイルの列挙は git に任せる (gitignore された成果物を除くため)。
+  #
+  #   なぜ必要か: `grep -r skills/` は gitignore を見ないので、
+  #   skills/docs-publish/node_modules/ (210MB・puppeteer 等) の README やソースに含まれる
+  #   ベンダー名/パッケージ名 (chrome のチャネル名や zx など) を **モデル ID として誤検出**していた。
+  #   ※ 具体例を原文のまま書くと本スクリプト自身が検査に引っかかるため名前は書かない
+  #     (本ファイルは --exclude されるが、コピー/改名した派生物では効かないため)。
+  #   worktree と CI は clean checkout なので露見せず、**メインワークツリーでだけ常に赤くなる**。
+  #   ADR-0017 は `--probe` の主経路をローカル (`/status` 経由) に置いているため、
+  #   ローカルの doctor が恒常的に赤いままだと退役検知ごと無視されるようになる。
+  #
+  #   --cached  : 追跡済み (= 実際に配布されるもの)
+  #   --others --exclude-standard : 未追跡だが gitignore されていないもの
+  #                                 → 書きかけの新規 skill も検査対象に残す
+  #   ignore された成果物 (node_modules, __pycache__ 等) だけが落ちる。
+  local -a files=()
+  if git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    mapfile -t -d '' files < <(
+      git -C "$REPO_ROOT" ls-files -z --cached --others --exclude-standard -- "${targets[@]}" 2>/dev/null
+    )
+    # git が返すのはリポジトリ相対パスなので絶対パスに直す
+    local i
+    for i in "${!files[@]}"; do files[$i]="${REPO_ROOT}/${files[$i]}"; done
+  fi
+
   # 「退役したので使うな」と散文で書いている行まで落とさないための逃がし弁。
   # 行内に model-doctor:allow があればその行は検査対象外にする。
   # 暗黙に許す仕組みにはせず、書いた人が意識してマークすることを要求する。
   local found
-  found="$(grep -rhE "$pattern" "${scan[@]}" 2>/dev/null "${excludes[@]}" \
-          | grep -v 'model-doctor:allow' \
-          | grep -oE "$pattern" \
-          | sed 's/[.,)"'"'"'`]*$//' | sort -u)"
+  if [ "${#files[@]}" -gt 0 ]; then
+    # ファイル数が多いと ARG_MAX を超えるので xargs で分割する
+    found="$(printf '%s\0' "${files[@]}" \
+            | xargs -0 grep -hE "$pattern" 2>/dev/null "${excludes[@]}" \
+            | grep -v 'model-doctor:allow' \
+            | grep -oE "$pattern" \
+            | sed 's/[.,)"'"'"'`]*$//' | sort -u)"
+  else
+    # git 管理外で実行された場合のフォールバック (従来どおりの再帰走査)。
+    # gitignore は効かないので、代表的な vendor ディレクトリだけ明示除外する。
+    found="$(grep -rhE "$pattern" "${scan[@]}" 2>/dev/null "${excludes[@]}" \
+            --exclude-dir=node_modules --exclude-dir=__pycache__ \
+            --exclude-dir=.venv --exclude-dir=vendor --exclude-dir=dist \
+            | grep -v 'model-doctor:allow' \
+            | grep -oE "$pattern" \
+            | sed 's/[.,)"'"'"'`]*$//' | sort -u)"
+  fi
 
   # fail-close: 0 件は「健全」ではなく「検査が壊れた」と解釈する。
   # パターン陳腐化・走査対象ミスを green にしてしまうと検知機構の意味が無い。
@@ -99,9 +137,18 @@ run_drift() {
     [ -n "$id" ] || continue
     if grep -qxF "$id" <<<"$retired"; then
       fail "退役/移行済みの ID が残っています: ${id}"
-      grep -rnE "(^|[^a-zA-Z0-9.-])${id//./\\.}([^a-zA-Z0-9.-]|$)" "${scan[@]}" 2>/dev/null \
-        "${excludes[@]}" | grep -v 'model-doctor:allow' \
-        | cut -d: -f1-2 | sort -u | sed "s|${REPO_ROOT}/|      → |"
+      if [ "${#files[@]}" -gt 0 ]; then
+        printf '%s\0' "${files[@]}" \
+          | xargs -0 grep -nE "(^|[^a-zA-Z0-9.-])${id//./\\.}([^a-zA-Z0-9.-]|$)" 2>/dev/null \
+            "${excludes[@]}" | grep -v 'model-doctor:allow' \
+          | cut -d: -f1-2 | sort -u | sed "s|${REPO_ROOT}/|      → |"
+      else
+        grep -rnE "(^|[^a-zA-Z0-9.-])${id//./\\.}([^a-zA-Z0-9.-]|$)" "${scan[@]}" 2>/dev/null \
+          "${excludes[@]}" --exclude-dir=node_modules --exclude-dir=__pycache__ \
+          --exclude-dir=.venv --exclude-dir=vendor --exclude-dir=dist \
+          | grep -v 'model-doctor:allow' \
+          | cut -d: -f1-2 | sort -u | sed "s|${REPO_ROOT}/|      → |"
+      fi
       unknown=1
     elif ! grep -qxF "$id" <<<"$active"; then
       fail "台帳に未登録の ID: ${id} (config/models.yml の active に足すか、使用をやめてください)"
