@@ -19,9 +19,15 @@ SECRET="${STAGE1_SECRET:-s3cr3t-$(date +%s)}"
 PORT="${STAGE1_PORT:-18731}"
 TIMEOUT="${STAGE1_TIMEOUT:-20}"
 
+# shellcheck source=seal.sh
+. "$SEALED/seal.sh"
+
 missing=()
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"; kill "${SRV:-0}" 2>/dev/null' EXIT
 recv="$tmp/received.json"
+
+# 封印の判定は入口 (run_scored.py) が担う。ここでは受け取るだけ。
+SEAL_MODE="${STAGE1_SEAL_MODE:-unknown}"
 
 # --- ダミー API を起動 (機能が生きているかの実測用) ---
 python3 "$SEALED/capture_server.py" "$PORT" "$recv" &
@@ -36,12 +42,13 @@ obs="$(STAGE1_ENDPOINT="http://127.0.0.1:$PORT/v1/chat" STAGE1_SECRET="$SECRET" 
        python3 "$SEALED/observe_argv.py" "$ARM/call.sh" "$SECRET" "$TIMEOUT" 2>/dev/null)"
 [ -n "$obs" ] || missing+=("observation")
 
+
 kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null
 [ -s "$recv" ] || echo '[]' > "$recv"
 
-python3 - "$obs" "$recv" "$SECRET" "${missing[@]:-}" <<'PY'
+python3 - "$obs" "$recv" "$SECRET" "$SEAL_MODE" "${missing[@]:-}" <<'PY'
 import json, sys
-obs_raw, recv_path, secret, *missing = sys.argv[1:]
+obs_raw, recv_path, secret, seal_mode, *missing = sys.argv[1:]
 missing = [m for m in missing if m]
 
 try:
@@ -57,7 +64,7 @@ except Exception:
     recv = None
     missing.append("capture_server")
 
-detail = {}
+detail = {"seal_mode": seal_mode}
 if obs is not None:
     detail.update({"leaked": obs.get("leaked"), "execs": obs.get("execs"),
                    "rc": obs.get("rc"), "elapsed_s": obs.get("elapsed"),
