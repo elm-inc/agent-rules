@@ -13,7 +13,9 @@ MAX_LINES="${CLAUDE_MD_MAX_LINES:-200}"
 
 # skill でない組み込みスラッシュコマンド (幽霊参照から除外)
 # code-review / security-review / init は Claude Code 同梱の builtin skill (本リポには置かない)
-BUILTINS=" model verify run config rename resume plugin mcp clear help compact memory login logout code-review security-review init "
+# loop / schedule / workflows も builtin (自律実行系。2026-09 に本リポから参照し始めたため追加)。
+# 本リポに skill 実体があるもの (status 等) は入れない — 削除時に幽霊参照を検出できなくなるため
+BUILTINS=" model verify run config rename resume plugin mcp clear help compact memory login logout code-review security-review init loop schedule workflows "
 
 fail=0
 
