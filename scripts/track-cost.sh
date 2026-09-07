@@ -16,6 +16,7 @@
 # 結果は docs/design/ai-workflow.md の月別コスト表に転記する。
 
 set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/curl-secret.sh"   # Issue #40: 鍵を argv に載せない
 
 MONTH="${MONTH:-$(date +%Y-%m)}"
 [ "${1:-}" = "--month" ] && MONTH="$2"
@@ -27,8 +28,7 @@ echo ""
 echo "--- DeepSeek ---"
 if [ -f ~/.deepseek_token ]; then
   DEEPSEEK_API_KEY="$(cat ~/.deepseek_token)"
-  BALANCE=$(curl -sf https://api.deepseek.com/user/balance \
-    -H "Authorization: Bearer $DEEPSEEK_API_KEY" 2>/dev/null \
+  BALANCE=$(curl_auth_bearer "$DEEPSEEK_API_KEY" -sf https://api.deepseek.com/user/balance 2>/dev/null \
     | jq -r '.balance_infos[0].total_balance // "N/A"')
   echo "  現在残高: \$$BALANCE"
   echo "  月次消費は dashboard で確認: https://platform.deepseek.com/usage"

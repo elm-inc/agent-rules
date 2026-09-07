@@ -27,6 +27,7 @@ Gemini 3.1 Pro (入力 1,048,576 token / 出力 65,536 token) を使い、Claude
 - どちらも無ければ https://aistudio.google.com/apikey で取得
 - `GEMINI_API_KEY= /gemini-review ...` (明示的に空) は **fallback せず中止** — 機密案件でクラウド送信を止める非常口
 - エンドポイント: `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent`
+- 認証: **`x-goog-api-key` ヘッダ**。`?key=` の URL 埋め込みは使わない (Issue #40)
 
 > **モデル ID は [`config/models.yml`](../../config/models.yml) が単一ソース**。ここを直に書き換えず台帳を先に更新し、`bash scripts/model-doctor.sh` を通すこと。
 > 旧 `gemini-2.5-pro` は **2026-10-16 退役予定**。まだ動くが期限がある (ADR-0017)。 <!-- model-doctor:allow -->
@@ -151,7 +152,9 @@ PAYLOAD=$(jq -n \
     }
   }')
 
-RESPONSE=$(curl -sf --max-time 600 "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=$GEMINI_API_KEY" \
+. "$(git rev-parse --show-toplevel)/scripts/lib/curl-secret.sh"   # Issue #40: 鍵を argv/URL に載せない
+RESPONSE=$(curl_auth_header "x-goog-api-key" "$GEMINI_API_KEY" -sf --max-time 600 \
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent" \
   -H "Content-Type: application/json" \
   -d "$PAYLOAD")
 

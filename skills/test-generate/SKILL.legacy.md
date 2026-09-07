@@ -215,8 +215,8 @@ curl -sf "${LOCAL_LLM_BASE_URL:-http://localhost:8000/v1}/chat/completions" \
 PAYLOAD=$(jq -n --arg content "$PROMPT" \
   '{model:"deepseek-v4-pro", thinking:{type:"enabled"}, reasoning_effort:"high", messages:[{role:"user", content:$content}], max_tokens:8192}')
 
-curl -sf https://api.deepseek.com/v1/chat/completions \
-  -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+. "$(git rev-parse --show-toplevel)/scripts/lib/curl-secret.sh"   # Issue #40: 鍵を argv に載せない
+curl_auth_bearer "$DEEPSEEK_API_KEY" -sf https://api.deepseek.com/v1/chat/completions \
   -H "Content-Type: application/json" -d "$PAYLOAD" \
   | jq -r '.choices[0].message.content'
 ```

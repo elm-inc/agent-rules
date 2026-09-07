@@ -30,6 +30,9 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LEDGER="${REPO_ROOT}/config/models.yml"
 
+# Issue #40: API キーを curl の argv に載せないための共有ヘルパ
+. "${REPO_ROOT}/scripts/lib/curl-secret.sh"
+
 RED=$'\033[31m'; YEL=$'\033[33m'; GRN=$'\033[32m'; DIM=$'\033[2m'; RST=$'\033[0m'
 ok()   { echo "  ${GRN}✓${RST} $*"; PROBED=$(( ${PROBED:-0} + 1 )); }
 warn() { echo "  ${YEL}!${RST} $*"; }
@@ -199,7 +202,9 @@ probe_vendor() {  # $1=vendor  $2..=期待する ID 群
   # HuggingFace はモデル単位でしか引けないので個別に叩く
   if [ "$vendor" = "huggingface" ]; then
     for id in "${ids[@]}"; do
-      if curl -sf -m 20 "${url}${id}" ${token:+-H "Authorization: Bearer $token"} >/dev/null 2>&1; then
+      # Issue #40: 鍵を argv に載せない。token 未設定なら素の curl でよい
+      if { [ -n "$token" ] && curl_auth_bearer "$token" -sf -m 20 "${url}${id}" >/dev/null 2>&1; } \
+         || { [ -z "$token" ] && curl -sf -m 20 "${url}${id}" >/dev/null 2>&1; }; then
         ok "huggingface: ${id}"
       else
         fail "huggingface: ${id} が取得できません (リポジトリ名の誤り or 非公開)"
@@ -209,10 +214,13 @@ probe_vendor() {  # $1=vendor  $2..=期待する ID 群
   fi
 
   local resp
+  # Issue #40: いずれの経路も鍵を argv に載せない (curl-secret.sh 経由)。
+  # query_key は ?key= を URL から外し x-goog-api-key ヘッダへ移す
+  # (URL 埋め込みは argv に加えプロキシログ・リファラにも乗るため argv より悪い)。
   case "$auth" in
-    bearer)    resp="$(curl -sf -m 25 "$url" -H "Authorization: Bearer $token" 2>/dev/null)" ;;
-    x-api-key) resp="$(curl -sf -m 25 "$url" -H "x-api-key: $token" ${extra:+-H "$extra"} 2>/dev/null)" ;;
-    query_key) resp="$(curl -sf -m 25 "${url}?key=${token}" 2>/dev/null)" ;;
+    bearer)    resp="$(curl_auth_bearer "$token" -sf -m 25 "$url" 2>/dev/null)" ;;
+    x-api-key) resp="$(curl_auth_header "x-api-key" "$token" -sf -m 25 "$url" ${extra:+-H "$extra"} 2>/dev/null)" ;;
+    query_key) resp="$(curl_auth_header "x-goog-api-key" "$token" -sf -m 25 "$url" 2>/dev/null)" ;;
     *)         skip_vendor "$vendor" "${vendor}: 未知の auth 方式 '${auth}' → 未確認"; return ;;
   esac
 

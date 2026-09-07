@@ -124,8 +124,9 @@ fi
 # 1. DeepSeek V4-Flash (API、思考モード)
 #    観点の「拡散」が目的なので V4-Pro ではなく 1 桁安い Flash を使う
 if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
-  curl -sf --max-time 600 https://api.deepseek.com/v1/chat/completions \
-    -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+  . "$(git rev-parse --show-toplevel)/scripts/lib/curl-secret.sh"   # Issue #40: 鍵を argv に載せない
+  curl_auth_bearer "$DEEPSEEK_API_KEY" -sf --max-time 600 \
+    https://api.deepseek.com/v1/chat/completions \
     -H "Content-Type: application/json" \
     -d "$(jq -n --arg c "$PROMPT" '{model:"deepseek-v4-flash", thinking:{type:"enabled"}, reasoning_effort:"high", messages:[{role:"user", content:$c}], max_tokens:6000}')" \
     | jq -r '.choices[0].message.content' > "$BRAINSTORM_TMP/deepseek.md"
@@ -143,7 +144,8 @@ if [ "$WITH_GEMINI" = "1" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
   echo "WARN: --with-gemini だが GEMINI_API_KEY も ~/.gemini_token も無いため Gemini を skip"
 fi
 if [ "$WITH_GEMINI" = "1" ] && [ -n "${GEMINI_API_KEY:-}" ]; then
-  curl -sf --max-time 600 "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=$GEMINI_API_KEY" \
+  curl_auth_header "x-goog-api-key" "$GEMINI_API_KEY" -sf --max-time 600 \
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent" \
     -H "Content-Type: application/json" \
     -d "$(jq -n --arg c "$PROMPT" '{contents:[{parts:[{text:$c}]}], generationConfig:{maxOutputTokens:8192}}')" \
     | jq -r '[.candidates[0].content.parts[]?.text] | join("")' > "$BRAINSTORM_TMP/gemini.md"
