@@ -3,6 +3,7 @@
 # モデル ID の単一ソースは config/models.yml (ADR-0017)
 # Linear: AGENT-3
 set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/curl-secret.sh"   # Issue #40: 鍵を argv に載せない
 
 if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
   if [ -f ~/.deepseek_token ]; then
@@ -30,8 +31,7 @@ PAYLOAD=$(jq -n --arg p "$PROMPT" --arg m "$MODEL" '{
 }')
 
 START=$(date +%s.%N)
-RESPONSE=$(curl -sf https://api.deepseek.com/v1/chat/completions \
-  -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+RESPONSE=$(curl_auth_bearer "$DEEPSEEK_API_KEY" -sf https://api.deepseek.com/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d "$PAYLOAD")
 END=$(date +%s.%N)

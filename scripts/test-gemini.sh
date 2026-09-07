@@ -3,6 +3,7 @@
 # モデル ID の単一ソースは config/models.yml (ADR-0017)
 # Linear: AGENT-3
 set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/curl-secret.sh"   # Issue #40: 鍵を argv に載せない
 
 if [ -z "${GEMINI_API_KEY:-}" ]; then
   # ~/.gemini_token をフォールバックで読む
@@ -28,7 +29,9 @@ PAYLOAD=$(jq -n --arg p "$PROMPT" '{
 }')
 
 START=$(date +%s.%N)
-RESPONSE=$(curl -sf "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}" \
+# ?key= は argv に加えプロキシログ・リファラにも乗るため x-goog-api-key ヘッダへ (Issue #40)
+RESPONSE=$(curl_auth_header "x-goog-api-key" "$GEMINI_API_KEY" \
+  -sf "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent" \
   -H "Content-Type: application/json" \
   -d "$PAYLOAD")
 END=$(date +%s.%N)

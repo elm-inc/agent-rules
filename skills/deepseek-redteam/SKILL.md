@@ -12,6 +12,12 @@ DeepSeek V4-Pro の思考モードを使い、設計や実装の **致命的な�
 
 ## 前提
 
+> 🔒 **API キーを argv に載せない (Issue #40)**: `/proc/<pid>/cmdline` は既定で world-readable なので、
+> `-H "Authorization: Bearer $KEY"` は呼び出し中ずっと同一ホストの任意ユーザに鍵を晒す。 <!-- secret-argv:allow (アンチパターンの説明) -->
+> 共有ヘルパ `scripts/lib/curl-secret.sh` の `curl_auth_bearer` / `curl_auth_header` を使うこと
+> (`curl --config <(...)` でヘッダを渡すため argv には `/dev/fd/N` しか出ない)。
+
+
 - API キー: 環境変数 `DEEPSEEK_API_KEY` → 無ければ `~/.deepseek_token` (perms 600) の順に探す
 - どちらも無ければ https://platform.deepseek.com/api_keys で取得するよう案内
 - `DEEPSEEK_API_KEY= /deepseek-redteam ...` (明示的に空) は **fallback せず中止** — 機密案件でクラウド送信を止める非常口
@@ -116,8 +122,9 @@ PAYLOAD=$(jq -n \
     max_tokens: 32000
   }')
 
-RESPONSE=$(curl -sf --max-time 600 https://api.deepseek.com/v1/chat/completions \
-  -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+. "$(git rev-parse --show-toplevel)/scripts/lib/curl-secret.sh"   # Issue #40: 鍵を argv に載せない
+RESPONSE=$(curl_auth_bearer "$DEEPSEEK_API_KEY" -sf --max-time 600 \
+  https://api.deepseek.com/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d "$PAYLOAD")
 
