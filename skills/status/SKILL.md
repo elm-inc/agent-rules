@@ -82,6 +82,29 @@ fi
 - 退役予定が 90 日以内のものも同様に注意へ
 - キー未設定等で probe が成立しなかった場合も注意に出す (黙って skip しない)
 
+### 3-c. Linear の乖離チェック (ADR-0021)
+
+**Linear が取り残されるのは「メンテを忘れる」からではなく、作業経路の外にあるから。**
+出口 (`/worktree-finish` が Done にする) は既に自動なので、穴は 2 つだけ:
+**入口をすり抜けた**タスクと、**出口を通らずに消えた** worktree (Issue が In Progress のまま残る)。
+
+毎セッション実行する (ローカル検査のみで速い):
+
+```bash
+AGENT_RULES=~/repos/github.com/elm-inc/agent-rules
+bash "$AGENT_RULES/scripts/linear-audit.sh"
+```
+
+- **出力があったときだけ** `## ⚠ 注意` に出す。乖離ゼロなら無音なので平時は何も足さない
+- 終了コード 2 (jq 不在等で検査不能) は **0 件と誤認せず**、「Linear 乖離を検査できていない」と注意に出す
+- 「worktree が消えているのに active」が出たら、**Linear 側が In Progress のまま**の可能性が高い。
+  該当 Issue を MCP で確認し、実態に合わせて Done にするか worktree を作り直すかをユーザーに提案する
+- 恒久的に Linear 不要なリポは、そのリポのルートに `.no-linear` (1 行目に理由) を置けば対象外になる。
+  **中央集権の除外リストは作らない** — agent-rules は public で顧客案件名が混入するため
+
+> Linear 側にしか無い情報 (例: In Progress のまま放置された Issue で、ローカルに痕跡が無いもの) は
+> このスクリプトでは検出できない。気になるときは `/linear-status` で Linear 側から見る。
+
 ### 4. 出力フォーマット
 
 以下の markdown を出力する (セクションに情報がなければ省略):
