@@ -99,6 +99,9 @@ bash "$AGENT_RULES/scripts/linear-audit.sh"
 - 終了コード 2 (jq 不在等で検査不能) は **0 件と誤認せず**、「Linear 乖離を検査できていない」と注意に出す
 - 「worktree が消えているのに active」が出たら、**Linear 側が In Progress のまま**の可能性が高い。
   該当 Issue を MCP で確認し、実態に合わせて Done にするか worktree を作り直すかをユーザーに提案する
+- 「N 日停止」が出たら、**Issue を作る前に「まだやるのか」を確認する**。
+  滞留タスクに Issue を作ると滞留 Issue が増えるだけで、解こうとしている問題を悪化させる。
+  「未マージ 0 commit (実質空)」は畳む提案をしてよい
 - 恒久的に Linear 不要なリポは、そのリポのルートに `.no-linear` (1 行目に理由) を置けば対象外になる。
   **中央集権の除外リストは作らない** — agent-rules は public で顧客案件名が混入するため
 

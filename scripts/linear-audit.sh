@@ -7,7 +7,12 @@
 #   出口 (/worktree-finish が自動で Done にする) は既に自動なので、
 #   穴は (a) 入口をすり抜ける と (b) 出口を通らずに消える の 2 つだけ。
 #
-# 検出するのはこの 2 つに限る。**平時に出力しない**ことを最優先にする
+#   さらに (c) 滞留 (active だが長期間コミットが無い) を検出する。
+#   これは移行作業で判明した — 未連携 active 8 件のうち **6 件が 85-129 日停止**していた。
+#   **滞留タスクに Issue を作ると、避けたい滞留を自分で作ることになる。**
+#   「Issue を作る」前に「まだやるのか」を問える形にする。
+#
+# 検出するのはこの 3 つに限る。**平時に出力しない**ことを最優先にする
 #   (毎回 20 件出るような一覧は読まれなくなり、計器としての価値を失う)。
 #
 # 除外の考え方:
@@ -19,6 +24,7 @@
 
 set -uo pipefail
 SCOPE_ROOT="${LINEAR_AUDIT_ROOT:-$HOME/repos/github.com/elm-inc}"
+STALE_DAYS="${LINEAR_AUDIT_STALE_DAYS:-60}"   # これ以上コミットが無い active を滞留とみなす
 found=0
 emit() { echo "$1"; found=1; }
 
@@ -33,22 +39,40 @@ for repo in "$SCOPE_ROOT"/*/; do
   reg="$repo/.git/parallel-tasks.json"
   [ -f "$reg" ] || continue
 
-  # (a) 入口すり抜け: active なのに Linear 未連携
-  while IFS= read -r t; do
-    [ -n "$t" ] && emit "  [$name] worktree '$t' に Linear Issue が無い (既定必須)"
-  done < <(jq -r '.tasks[] | select(.status=="active") | select(.linear_issue_id==null) | .name' "$reg" 2>/dev/null)
+  # active な各タスクについて「事実」を集め、**1 タスク 1 行**にまとめて出す。
+  # 同じタスクが複数行に散ると読む負荷が上がり、計器として使われなくなる。
+  while IFS='|' read -r tname tpath tid; do
+    [ -n "$tname" ] || continue
+    facts=""
 
-  # (b) 出口を通らず消えた: active のまま worktree ディレクトリが存在しない
-  #     → /worktree-finish を通っていないので Linear は In Progress のまま取り残される
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    tname="${line%%|*}"; tpath="${line#*|}"; tid="${tpath##*|}"; tpath="${tpath%%|*}"
-    [ -d "$tpath" ] && continue
-    if [ "$tid" != "null" ] && [ -n "$tid" ]; then
-      emit "  [$name] '$tname' は worktree が消えているのに active。**${tid} が In Progress のまま**の可能性"
+    # (a) 入口すり抜け: Linear 未連携
+    [ "$tid" = "null" ] || [ -z "$tid" ] && facts="Linear 未連携"
+
+    if [ ! -d "$tpath" ]; then
+      # (b) 出口を通らず消えた: worktree が無いのに active
+      if [ "$tid" != "null" ] && [ -n "$tid" ]; then
+        facts="${facts:+$facts / }worktree 消滅 — **${tid} が In Progress のまま**の可能性"
+      else
+        facts="${facts:+$facts / }worktree 消滅 (レジストリの掃除漏れ)"
+      fi
     else
-      emit "  [$name] '$tname' は worktree が消えているのに active (レジストリの掃除漏れ)"
+      # (c) 滞留: worktree はあるが長期間コミットが無い
+      last="$(git -C "$tpath" log -1 --format=%ct 2>/dev/null)"
+      if [ -n "$last" ]; then
+        days=$(( ( $(date +%s) - last ) / 86400 ))
+        if [ "$days" -ge "$STALE_DAYS" ]; then
+          base="$(jq -r --arg n "$tname" '.tasks[] | select(.name==$n) | .base_branch // "main"' "$reg" 2>/dev/null | head -1)"
+          ahead="$(git -C "$tpath" rev-list --count "${base}..HEAD" 2>/dev/null || echo "?")"
+          if [ "$ahead" = "0" ]; then
+            facts="${facts:+$facts / }${days}日停止・未マージ 0 commit (実質空)"
+          else
+            facts="${facts:+$facts / }${days}日停止 (未マージ ${ahead} commit)"
+          fi
+        fi
+      fi
     fi
+
+    [ -n "$facts" ] && emit "  [$name] $tname — $facts"
   done < <(jq -r '.tasks[] | select(.status=="active") | "\(.name)|\(.worktree_path)|\(.linear_issue_id)"' "$reg" 2>/dev/null)
 done
 
