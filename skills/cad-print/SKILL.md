@@ -43,6 +43,7 @@ python3 ${SKILL_DIR}/scripts/cad_print.py <subcommand> [args]
 | `check <part.py>` | 診断のみ(高速) |
 | `render <part.py>` | 描画のみ |
 | `export <part.py> --format step\|stl\|3mf\|all` | 最終出力 |
+| `slice <model.stl\|3mf> [--printer --material --quality --nozzle --copies]` | **印刷できるファイル**に変換 (下記) |
 | `fit list [--printer P --material M]` / `fit get <type>` | 較正値の確認 |
 | `calib gauge [--out f]` | クリアランス試験ガウジ STL を生成(実機較正用) |
 | `conventions` | build123d 記述規約チートシート |
@@ -78,9 +79,34 @@ mm 既定 / selector は index 禁止(`sort_by`/`group_by`/`filter_by` + 位置)
 `outputs/diagnostics.json` は各 assertion に `measured / threshold / margin / passed`。失敗時は **margin に
 比例して**寸法を調整する(過補正しない)。肉厚は ray 近似で **"要目視" フラグ**付き — PNG と併せて判断。
 
+## スライス (印刷できるファイルにする)
+
+**プリンタは形を受け取れない。** STL / 3MF は形であって経路ではないので、機体・ノズル・
+フィラメント・品質を決めて G-code に落とす段が要る。build123d でも
+[ai-cad](https://github.com/elm-inc/ai-cad) でも出口は同じ STL/3MF なので、**どちらからも使える**。
+
+```bash
+python3 ${SKILL_DIR}/scripts/cad_print.py slice outputs/part.stl
+python3 ${SKILL_DIR}/scripts/cad_print.py slice part.3mf --material "Bambu PETG HF" --copies 2
+```
+
+出力は `<model の dir>/sliced/<name>.gcode.3mf`。microSD に入れて本体から選ぶか、
+Bambu Studio で開いて LAN 送信する。
+
+- **`--printer` はノズル付きプロファイルに解決する。** `Bambu Lab A1 mini.json` は
+  インスタンス化できない基底で、渡すと `from unsupported run found error, return -5` と
+  しか言わない (実測)。スクリプトが `... 0.4 nozzle.json` に直す
+- **プロファイル名を間違えたら候補を出す。** 名前が長いので当てずっぽうにさせない
+- **スライサの警告は必ず表示する** (薄すぎ・浮き・サポート不足はここに出る)
+- **複製は `--copies`** (内部で `--clone-objects` + `--arrange`)。CLI の `--repetitions` は `return -2` で落ちる (実測)
+- `3mf` を渡すほうが安全 (単位が埋まっているのでスケール事故が起きない)
+
 ## 環境・既知の制約
 
 - 初回 `build` 時に専用 venv を自動構築(build123d/OCP/trimesh/matplotlib、数百MB・数分)。`env rebuild` で作り直し。
 - **描画は既定 matplotlib(GL 不要・確実)**。`pyrender`(GL)は高品質だがカメラ調整が要・opt-in。
 - **HLR 線画(cad-khana)は現状 optional・無効**(pre-alpha が現行 build123d と依存衝突)。シェーディングで代替。将来 vendoring。
 - ヘッドレス GL は環境依存。matplotlib 経路は GL 不要なので常に動く。
+- `slice` は **`bambu-studio` が PATH にあること**が前提 (無ければその旨を言って終わる)。
+  プロファイルは Bambu Studio が `~/.config/BambuStudio/system/BBL/` に置くので、
+  一度 GUI を起動しておく必要がある。

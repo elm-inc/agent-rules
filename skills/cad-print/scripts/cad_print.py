@@ -10,6 +10,7 @@
   check <part.py>                  診断のみ (高速・描画/出力なし)
   render <part.py>                 描画のみ
   export <part.py> --format F      最終出力 (step|stl|3mf|all)
+  slice <model.stl|3mf> [opts]     印刷できる G-code 入り 3MF に変換 (Bambu Studio CLI)
   fit list|get <type>              較正値の参照 (--printer/--material で対象指定)
   calib gauge [--out f]            クリアランス試験ガウジ STL を生成 (実機較正用)
   conventions                      build123d 記述規約チートシートを表示
@@ -134,6 +135,34 @@ def cmd_export(args):
                       args.timeout, extra=[args.format]))
 
 
+def cmd_slice(args):
+    """**プリンタは形を受け取れない。** STL/3MF を印刷できるファイルに変える。
+
+    build123d でも ai-cad でも出口は同じ STL/3MF なので、この段はどちらからも使える。
+    """
+    sys.path.insert(0, str(SCRIPTS))
+    from slicing import SliceError, render, slice_model
+
+    model = Path(args.model)
+    out = Path(args.out) if args.out else model.parent / "sliced"
+    try:
+        stats = slice_model(
+            model,
+            out,
+            printer=args.printer,
+            material=args.material,
+            quality=args.quality,
+            nozzle=args.nozzle,
+            copies=args.copies,
+            timeout=args.timeout,
+        )
+    except SliceError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(render(stats))
+    return 0
+
+
 def cmd_fit(args):
     py = venv_python()
     code = (
@@ -204,6 +233,16 @@ def build_parser():
     s = sub.add_parser("export"); s.add_argument("part")
     s.add_argument("--format", default="stl", choices=["step", "stl", "3mf", "all"])
     s.add_argument("--timeout", type=int, default=180); s.set_defaults(f=cmd_export)
+
+    s = sub.add_parser("slice"); s.add_argument("model")
+    s.add_argument("--out", default=None, help="出力先 (既定: <model の dir>/sliced)")
+    s.add_argument("--printer", default="A1mini")
+    s.add_argument("--material", default="Bambu PLA Basic")
+    s.add_argument("--quality", default="0.20mm Standard")
+    s.add_argument("--nozzle", default="0.4")
+    s.add_argument("--copies", type=int, default=1, help="同じ部品を何個並べるか")
+    s.add_argument("--timeout", type=int, default=900, help="スライスの上限秒数")
+    s.set_defaults(f=cmd_slice)
 
     s = sub.add_parser("fit"); s.add_argument("fit_cmd", choices=["list", "get"])
     s.add_argument("type", nargs="?"); s.add_argument("--printer"); s.add_argument("--material")
