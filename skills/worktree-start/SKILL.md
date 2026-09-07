@@ -15,16 +15,27 @@ git worktree を作成し、並列開発タスクをレジストリに登録す�
 `$ARGUMENTS` を以下のように解釈する:
 - 第1トークン → タスク名（ブランチ名のサフィックスにも使用。例: `feat-auth`）
 - 残り → タスクの説明（例: `ユーザー認証機能の追加`）
-- `--linear <ID>`: Linear Issue ID (例: `ELM-123`)。指定すると:
+- **Linear 連携は既定 ON** (ADR-0021)。既存 Issue に紐付けるか、無ければ**新規作成する**:
   - ブランチ名が `worktree/<linear-id-lowercase>-<タスク名>` になる (Linear 側で PR 自動紐付け)
   - Linear Issue を In Progress に遷移
   - `parallel-tasks.json` に `linear_issue_id` を記録
+- `--linear <ID>`: 紐付ける既存 Issue を明示する (例: `ELM-123`)。省略時は新規作成
+- `--no-linear`: **この 1 回だけ** Linear を使わない。理由を一言添えること
+  (恒久的に不要なリポは下記の `.no-linear` を使う)
 - `--no-remote`: Remote Control 付き起動コマンドを案内しない。指定しない場合 (デフォルト) は最終案内に `claude --remote-control "<タスク名>"` を含める (iPhone 公式 Claude アプリの Code タブから push 通知・状態確認可能)
 - `--tab`: zellij セッション内 (`$ZELLIJ` が設定されている) なら、worktree を cwd にした新しい zellij タブを開き、worktree へ cd して、**引き継ぎドキュメント (手順4) を初期プロンプトに渡して** `claude` を自動起動する (Enter まで送出)。zellij 外では無視して従来の案内に戻す
 
 なお `--tab` の有無にかかわらず、毎回タスク引き継ぎドキュメント (B+D) を `<共有.git>/worktree-tasks/<ID>-<タスク名>.md` に作成する (手順4)。docs/ を汚さず中央フォルダに ID 付きで集約し、タスク完了後も残す。
 
-タスク名が未指定の場合はユーザーに確認する。Linear 運用ポリシー (project_linear_workflow メモリ) に従い、ステークホルダー可視化が必要な作業は `--linear` を付ける。
+タスク名が未指定の場合はユーザーに確認する。
+
+> 🔗 **Linear は既定で必須 (ADR-0021)**。実測で「worktree タスク 145 件中 Linear 連携 27%・
+> commit への ELM 参照 0 件」だったのは、規律の問題ではなく **Linear が作業経路の外にあった**ため。
+> 入口を既定 ON にして「付け忘れる」経路を構造的に潰す。
+>
+> **恒久的に不要なリポは、そのリポのルートに `.no-linear` を置く** (1 行目に理由を書く)。
+> マーカーがあれば本スキルは Linear 連携を丸ごとスキップする。
+> **中央集権の除外リストは作らない** — agent-rules は public なので顧客案件名が混入する。
 
 ## 実行手順
 
@@ -51,12 +62,34 @@ git worktree を作成し、並列開発タスクをレジストリに登録す�
   git worktree add "${WORKTREE_BASE}/<タスク名>" -b "<ブランチ名>"
   ```
 
-### 3. Linear Issue 連携 (--linear 指定時のみ)
-- Linear MCP の `get_issue` 相当で Issue が存在することを確認
-- 既に Done/Cancelled なら警告して中断 (`--force` で続行可)
+### 3. Linear Issue 連携 (既定 ON。除外条件に当たるときだけスキップ)
+
+**まずスキップ条件を判定する**:
+
+```bash
+# リポジトリルートに .no-linear があれば恒久的に対象外
+MAIN_WORKTREE=$(git worktree list --porcelain | head -1 | sed 's/worktree //')
+if [ -f "$MAIN_WORKTREE/.no-linear" ]; then
+  echo "Linear 対象外: $(head -1 "$MAIN_WORKTREE/.no-linear")"
+fi
+```
+
+- **`.no-linear` がある / `--no-linear` 指定** → 連携をスキップし、レジストリの
+  `linear_issue_id` は `null` のままにする。案内文にも「Linear 対象外」と明記する
+- **`--linear <ID>` 指定あり** → その Issue を使う
+  - `get_issue` 相当で存在を確認。既に Done/Cancelled なら警告して中断 (`--force` で続行可)
+- **いずれも無い (既定)** → **Issue を新規作成する**
+  - title はタスクの説明から簡潔に組み立てる
+  - description は「短い要約 + docs リンク」のみ (CLAUDE.md の重複禁止に従う)
+  - team はリポジトリに対応するものを選ぶ。判断できなければユーザーに 1 回だけ確認する
+
+連携する場合は共通して:
 - `update_issue` 相当で state を `In Progress` (`Started`) に遷移
 - Issue の Assignee が未設定なら自分にアサイン
 - Issue URL を控えてレジストリと最終案内に含める
+- **Linear MCP が未認証なら**: 警告を出して Issue 連携だけスキップし、worktree 作成は続行する。
+  このとき `linear_issue_id` は `null` になるので、後で `/status` の乖離検出に現れる
+  (黙って無かったことにしない)
 
 ### 4. タスク引き継ぎドキュメント作成 (B+D)
 

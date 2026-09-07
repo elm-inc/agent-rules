@@ -120,6 +120,8 @@
 - **重複禁止**: Issue description は「短い要約 + docs リンク」のみ。**Linear の Docs/Wiki 機能は使わない** (vendor lock-in)
 - **Project** = 多段階 / **Issue** = 1 worktree = 1 PR / **サブ Issue** = Phase。相互リンク: branch `worktree/<linear-id>-<task>` / commit `feat: ... (ELM-123)` / docs 冒頭 `- Linear: ELM-123`
 - スキル: `/linear-status` (現状表示) / `/linear-issue` (作成・状態変更) / `/linear-plan` (Project + サブ Issue 一括作成)
+- **Linear は既定で必須** (ADR-0021)。`/worktree-start` が既定で Issue を作り In Progress にする。**恒久的に不要なリポは自身のルートに `.no-linear` (1 行目に理由)** を置く。1 回だけ外すなら `--no-linear`。**中央集権の除外リストは作らない** (public repo に顧客案件名が混入するため)
+- **乖離は `/status` が毎回検査する** (`scripts/linear-audit.sh`)。検出するのは「入口をすり抜けた active タスク」と「worktree が消えたのに active = Issue が In Progress のまま」の 2 つだけ。乖離ゼロなら無音
 
 ## Notion 連携 (人間共有用)
 
