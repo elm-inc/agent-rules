@@ -61,26 +61,34 @@ while [ "$#" -gt 0 ]; do
 done
 
 # --- Fable: transcript を走査 ---------------------------------------------
-# "input cache_write_5m cache_write_1h cache_read output" を返す。
+# "input cache_write_5m cache_write_1h cache_read_5.1 cache_read_5 output parse_error件数" を返す。
 # fail-safe: 依存欠如・データ無しは "0 0 0 0 0" (安全側 = 0 実費)。
 # 注: model 一致は test("fable") と広く取る。過去月レポートで旧世代の Fable も
 #     正しく集計するためで、退役 ID を意図的に含む。  # model-doctor:allow
 aggregate_fable() {
   local month="$1" first
   first="${month}-01"
-  command -v jq >/dev/null 2>&1 || { echo "0 0 0 0 0 0"; return 0; }
-  [ -d "$PROJECTS" ] || { echo "0 0 0 0 0 0"; return 0; }
+  command -v jq >/dev/null 2>&1 || { echo "0 0 0 0 0 0 0"; return 0; }
+  [ -d "$PROJECTS" ] || { echo "0 0 0 0 0 0 0"; return 0; }
 
   local -a files ffiles
   mapfile -t files < <(find "$PROJECTS" -type f -name '*.jsonl' -newermt "$first 00:00:00" 2>/dev/null)
-  [ "${#files[@]}" -eq 0 ] && { echo "0 0 0 0 0 0"; return 0; }
+  [ "${#files[@]}" -eq 0 ] && { echo "0 0 0 0 0 0 0"; return 0; }
   mapfile -t ffiles < <(grep -lF "claude-fable" "${files[@]}" 2>/dev/null)
-  [ "${#ffiles[@]}" -eq 0 ] && { echo "0 0 0 0 0 0"; return 0; }
+  [ "${#ffiles[@]}" -eq 0 ] && { echo "0 0 0 0 0 0 0"; return 0; }
 
   # cache read は世代別に分ける (第6列にモデル世代フラグを出す)
   cat "${ffiles[@]}" 2>/dev/null \
-    | jq -rc --arg m "$month" '
-        select(.type == "assistant")
+    | jq -Rrc --arg m "$month" '
+        # 生行で受ける。cat で連結した中に 1 行でも不正 JSON があると
+        # jq はストリーム全体を abort するため (hook_success の attachment 等)、
+        # ここで行ごとに parse を試み、失敗した行は数えてスキップする。
+        (try fromjson catch null) as $o
+        | if $o == null then
+            [0, 0, 0, 0, 0, "parse_error"] | @tsv
+          else
+            $o
+        | select(.type == "assistant")
         | select((.message.model // "") | test("fable"))
         | select((.timestamp // "")[0:7] == $m)
         | [ (.message.usage.input_tokens // 0),
@@ -89,13 +97,15 @@ aggregate_fable() {
             (.message.usage.cache_read_input_tokens // 0),
             (.message.usage.output_tokens // 0),
             (if (.message.model // "") | test("fable-5-1") then "new" else "old" end)
-          ] | @tsv' 2>/dev/null \
-    | awk -F'\t' 'BEGIN{i=c5=c1=crn=cro=o=0}
+          ] | @tsv
+          end' 2>/dev/null \
+    | awk -F'\t' 'BEGIN{i=c5=c1=crn=cro=o=bad=0}
+           $6 == "parse_error" { bad++; next }
            { i+=$1; o+=$5
              if ($6 == "new") { crn+=$4 } else { cro+=$4 }
              if ($3 > $2) { c5+=$2 }            # 内訳異常時は全量 5m (下限) 扱い
              else         { c5+=$2-$3; c1+=$3 } }
-           END{ printf "%d %d %d %d %d %d\n", i, c5, c1, crn, cro, o }'
+           END{ printf "%d %d %d %d %d %d %d\n", i, c5, c1, crn, cro, o, bad }'
 }
 
 # 引数: i c5 c1 cache_read_5.1 cache_read_5 o
@@ -228,7 +238,7 @@ case "$MODE" in
     acalls="$(echo "$r" | cut -d'|' -f4)"
     aunmet="$(echo "$r" | cut -d'|' -f5)"
     total="$(echo "$r" | cut -d'|' -f6)"
-    read -r i c5 c1 crn cro o <<<"$ftoks"
+    read -r i c5 c1 crn cro o fbad <<<"$ftoks"
     cr=$(( crn + cro ))
 
     [ "$MONTH" = "$(date +%Y-%m)" ] && write_cache "$MONTH" "$total" "$aunmet"
@@ -250,6 +260,10 @@ case "$MODE" in
     echo
     printf "    output       : %'d tok\n" "$o" 2>/dev/null || printf "    output       : %d tok\n" "$o"
     echo "    小計         : \$$fcost"
+    if [ "${fbad:-0}" -gt 0 ] 2>/dev/null; then
+      echo "    ⚠️  parse できない行を ${fbad} 件スキップした (集計から漏れている可能性がある)。"
+      echo "        transcript に不正な JSON 行が混じっている。件数が増え続けるなら要調査。"
+    fi
     echo ""
     echo "  [GPT-6 Astra]  呼び出し台帳 ($ASTRA_LEDGER)"
     echo "    呼び出し     : ${acalls} 回 (うち \$ 未計上 ${aunmet} 回 = トークン不明 or 中断)"
