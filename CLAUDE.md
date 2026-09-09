@@ -30,7 +30,7 @@
 | その他のロール | スキル |
 |---|---|
 | 高難度実装・設計 (Fable 5.1 subagent) | `/fable-task` |
-| セカンドオピニオン (Codex = GPT-5.6 Sol) | `/codex-review`・`/codex-task`・`/codex-audit` |
+| セカンドオピニオン (Codex CLI) | `/codex-review`・`/codex-task`・`/codex-audit` — **既定が `gpt-6-astra` に上がっている** (2026-09-07 実測)。安く回したいなら `--model` 明示 |
 | 高リスク差分の異ベンダー検証 (GPT-6 Astra・実費) | `/codex-review --astra` |
 | テスト観点・実装 / データ / 健全性 | `/test-generate` / `/test-data` / `/mutation-check` |
 | 探索・調査の床 (Haiku subagent) | `explorer` / `researcher` (`~/.claude/agents/`) |
