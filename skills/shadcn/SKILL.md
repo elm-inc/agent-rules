@@ -56,6 +56,7 @@ test -f .claude/hooks/design-guard.sh || cp "$AR/templates/claude-hooks/design-g
 chmod +x .claude/hooks/design-guard.sh
 ```
 - symlink でなく**コピー** (他環境で解決される必要があるため)。既存は上書きしない
+- **コピーしたものはコミットする** (`.claude/rules/*` `.claude/hooks/*` `.claude/settings.json`)。コミットしないなら symlink で足りるので、コピーという選択自体がコミット前提。非追跡は `.claude/settings.local.json` だけ (個人のローカル上書き) → `.gitignore` に足す (`/project-init` §5)
 - `shadcn.md` = shadcn の使い方 / `elm-design-layout.md` = レイアウト・型・余白規約 / `elm-design-overrides.md` = **managed/owned 分離**(カスタムを base 更新から守る)
 - **機械ガード**: `.claude/settings.json` の PreToolUse に design-guard を配線 (managed への直接編集を `ask` で止める)。既存 hooks は保持してマージ:
   ```bash
