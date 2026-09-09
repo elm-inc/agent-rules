@@ -54,13 +54,27 @@ test -f <repo>/CLAUDE.md || cp templates/project-claude-md.md <repo>/CLAUDE.md
 
 ### 5. .gitignore への追記 (重複しないよう確認してから)
 
-案件で使う可能性のある秘匿ファイルを予防的に無視 (既に記載があれば足さない):
+案件で使う可能性のある秘匿ファイルと**個人のローカル設定**を予防的に無視 (既に記載があれば足さない):
 ```
 .newrelic-profile
 .envrc
 .mcp.json
+.claude/settings.local.json
 ```
 > New Relic の `.newrelic-profile`/`.envrc` は顧客名漏洩防止で commit 禁止 (安全原則)。`/newrelic init` を使う場合はそちらが専用 .gitignore を生成するため二重にならないよう確認する。
+
+#### `.claude/` のどれを追跡するか
+
+**`settings.local.json` だけが非追跡**で、それ以外はコミットする。
+
+| | 追跡 | 理由 |
+|---|---|---|
+| `.claude/rules/*.md` | **する** | `paths:` スコープ付きのプロジェクト規約。eslint 設定と同じ性質 |
+| `.claude/hooks/*` | **する** | 機械ガード。1 台にしか無いガードは何も守らない |
+| `.claude/settings.json` | **する** | hook の配線。無いとガードが発火しない |
+| `.claude/settings.local.json` | **しない** | 個人のローカル上書き |
+
+**§展開ルールの「symlink でなくコピー」は、コミットされる前提から来ている** — コミットしないなら symlink で足りる。展開したものはプロジェクトの一部として追跡する。
 
 ### 5.5 フロントエンド (React/shadcn) 案件のとき (任意)
 
