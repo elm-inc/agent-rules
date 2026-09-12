@@ -77,9 +77,26 @@ private / 社内レジストリの認証は `components.json` の `registries` �
 
 トークンは `.env.local` から読ませ、**値を直書きしない** (New Relic の鍵運用と同型)。
 
-## 5. 案件横断のデザインレギュレーション (design-registry 単一ソース)
+## 5. 案件横断のデザインレギュレーション (正典は design-system-platform)
 
-案件ごとにデザインは違っても、**基本方針・レギュレーション (トークン・テーマ骨格・a11y/motion 規約) は 1 箇所に定常配置し、案件では差分だけを指示する**のが良い。これは custom registry の `registry:base` で実現できる。**専用リポ `design-registry` を単一ソース**にするのを推奨 (agent-rules の「ルール単一ソース」のデザイン版)。根拠: [`ADR-0014`](../adr/0014-shadcn-design-registry.md)。雛形: `templates/design-registry/`。
+案件ごとにデザインは違っても、**基本方針・レギュレーション (トークン・テーマ骨格・a11y/motion 規約) は 1 箇所に定常配置し、案件では差分だけを指示する**のが良い。
+
+> ⚠ **正典の場所が変わりました (2026-09-12 / [ADR-0022](../adr/0022-dtcg-canon-supersedes-shadcn-registry.md) が [ADR-0014](../adr/0014-shadcn-design-registry.md) を Supersede)。**
+>
+> | | 場所 |
+> |---|---|
+> | **正典** | [`elm-inc/design-system-platform`](https://github.com/elm-inc/design-system-platform) の `tokens/` (**DTCG**) |
+> | **配信エッジ** | `elm-inc/design-registry` の `registry.json` — **生成物。手で編集しない** |
+>
+> 案件側の手順 (`shadcn add @elm/base`) は**変わりません**。値を直したいときは正典を直し、
+> `dsp emit shadcn` で `registry.json` を作り直します。
+> 反映先は shadcn registry のほか **Figma / Claude Design / Storybook** があり、すべて adapter 経由の生成物です。
+>
+> 検査は `/design-system` スキル (実装は `dsp` CLI):
+> ```bash
+> node ~/repos/github.com/elm-inc/design-system-platform/cli/dsp.mjs verify project .
+> ```
+> 取り込んだ base が今の正典と揃っているかを見ます (**認証不要・案件 CI から回せる**)。
 
 > ✅ **稼働中**: [`elm-inc/design-registry`](https://github.com/elm-inc/design-registry) (public) が GitHub Pages で配信中 (`https://elm-inc.github.io/design-registry/r/{name}.json`)。item:
 > - **`base`** (`registry:theme` + `extends:none`) — 色 (OKLCH light/dark, 由来 shadcn/create preset `b1ZOy0qg4` = indigo/zinc) + **型 scale** (`--text-h1` 等 + `@layer base` の h1..p 既定) + **余白** (`--gutter`/`--section-gap`/`--page-max`) + **sidebar 寸法** (`--app-sidebar-width` 等)
@@ -121,7 +138,7 @@ shadcn add @elm/app-shell       # レイアウト骨格 (sidebar+header+content)
 
 - **トークン上書き** → `app/theme.overrides.css` に `:root{}`/`.dark{}` で書き、root `layout.tsx` で **`globals.css` の直後に import** (cascade で後勝ち)。base 更新は managed だけ新しくし、owned は維持 = **「カスタム維持 × それ以外は base 反映」**が成立
 - **コンポーネント** → `components/ui/*` を編集せずラッパー/案件コンポーネントで
-- **3 手で徹底** (`/shadcn` が配線): ① rule `elm-design-overrides.md` (managed/owned を明文化) ② PreToolUse ガード `.claude/hooks/design-guard.sh` (managed への直接編集を `ask` で止める) ③ drift CI (`templates/ci/design-registry-drift.yml`、`--diff` が空でないと fail)。散文だけに頼らず機械で強制する。根拠: ADR-0014
+- **3 手で徹底** (`/shadcn` が配線): ① rule `elm-design-overrides.md` (managed/owned を明文化) ② PreToolUse ガード `.claude/hooks/design-guard.sh` (managed への直接編集を `ask` で止める) ③ drift CI (`design-system-platform` の `templates/ci/design-verify.yml`、`dsp verify project` が DRIFT なら fail)。散文だけに頼らず機械で強制する。根拠: ADR-0014 → [ADR-0022](../adr/0022-dtcg-canon-supersedes-shadcn-registry.md)
 
 ## 6. 落とし穴・要確認
 
