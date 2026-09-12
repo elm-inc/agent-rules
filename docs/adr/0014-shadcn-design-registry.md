@@ -2,7 +2,10 @@
 
 ## ステータス
 
-採択 (2026-08-11)
+採択 (2026-08-11) — **Superseded by [ADR-0022](0022-dtcg-canon-supersedes-shadcn-registry.md) (2026-09-12)**
+
+> 正典は `design-registry/registry.json` から **design-system-platform の `tokens/` (DTCG)** に移った。
+> `registry.json` は生成物になり、手で編集しない。案件側の手順 (`shadcn add @elm/base`) は変わらない。
 
 ## 文脈
 
