@@ -12,9 +12,15 @@
 #   - `retired:` は「かつて使っていた ID」。docs/adr の履歴記述と突き合わせるための記録で、
 #     operational surface (skills/ scripts/ CLAUDE.md) に現れたら CI が落とす
 #
+# drift は 2 種類ある (2026-09-07 追記):
+#   (a) ID の退役 … `model-doctor --probe` が検知する
+#   (b) **`managed_by:` の既定が別のモデルに動く** … 台帳が ID を持たないので probe では
+#       検知できない。値段が変わるとコスト規律が黙って破れる (secondopinion で発生)。
+#       `managed_by:` を使う項目は、四半期見直しで**実際に何が走るかを毎回確かめる**
+#
 # 四半期見直し: 次回 2026-11
 
-updated: 2026-09-06
+updated: 2026-09-07
 
 # --- 稼働中のモデル -------------------------------------------------------
 active:
@@ -106,9 +112,19 @@ active:
     managed_by: codex-cli
     layer: 多様性
     note: >-
-      Codex CLI が既定モデルを管理するため ID を固定しない (2026-07-09 以降の既定は
-      GPT-5.6 Sol)。スキル側も `codex review` / `codex exec` を呼ぶだけで --model を渡さない。
-      高リスク差分で明示的に上位を使う場合のみ `--model gpt-6-astra` (下の frontier_diversity)
+      **⚠ 2026-09-07 実測: Codex CLI 0.153.4 の既定は `gpt-6-astra`** —
+      下の frontier_diversity と同じモデルである。`~/.codex/config.toml` から `model` を
+      外して `codex exec` を実行し、出力の `model:` 行で 3 回確認した。
+      ADR-0017 が記録した「2026-07-09 以降の既定は GPT-5.6 Sol」は**もう成り立たない**。
+      **帰結: `--model` を渡さない `/codex-review` はフロンティア級の実費で走る。**
+      CLAUDE.md の「フロンティア級は高リスク変更に限る」が既定では守られない。
+      **教訓: `managed_by:` は ID の追随を CLI に任せる指定だったが、ベンダーは既定を
+      「値段の違うモデル」へ動かす。** ID の退役 (deepseek-reasoner) だけでなく
+      **既定の格上げ**も drift であり、しかも台帳が ID を持たないので
+      `model-doctor --probe` では検知できない (probe は台帳の ID を問い合わせるだけ)。
+      安い層と使い分けたいなら、スキル側で `--model` を明示するしかない。
+      2026-09-07 は使用上限に当たり、代替 ID (`gpt-5.6-sol` 等) が現在も有効かは**未確認**。
+      上限復帰後に確認して、この項目を ID 固定に切り替えるか判断すること。
 
   # 多様性層のフロンティア級 (高リスク変更時のみ・異ベンダー独立視点)
   - key: frontier_diversity
@@ -123,6 +139,9 @@ active:
       2026-09-06 に本機から実測確認: reasoning.effort は low|medium|high|xhigh|max のみ
       (`none` は 400)、temperature/top_p は非サポート (400)、Chat Completions と
       Responses の両方に応答する。
+      **2026-09-07: Codex CLI の既定がこの ID になったため、`--model gpt-6-astra` は
+      現状は冗長** (上の secondopinion 参照)。「明示的に上位を使う」という区別が
+      効かなくなっているので、格上げを意図したときだけ使う運用は成立していない。
       **Codex CLI 0.153.4 以上が必要** — 0.149.1 は server-side で 400
       ("requires a newer version of Codex") を返す。根拠: ADR-0019
 
@@ -158,6 +177,16 @@ retired:
     vendor: deepseek
     retired_on: 2026-07-24
     successor: deepseek-v4-flash
+  - id: gpt-5.5
+    vendor: openai
+    retired_on: 2026-09-07  # 404 を観測した日 (退役日そのものは不明)
+    successor: null  # Codex CLI 管理 (secondopinion 参照)
+    note: >-
+      台帳では ID を固定していなかったが、**ローカルの `~/.codex/config.toml` が
+      `model = "gpt-5.5"` をピンしていた**ため `/codex-review` が
+      「The model `gpt-5.5` does not exist」で全く動かなかった。
+      **台帳が ID を持たない項目は、ローカル設定の drift を probe で検知できない。**
+      `managed_by:` の項目は「実際に何が走るか」を四半期見直しで確かめること。
   - id: gemini-2.5-pro
     vendor: gemini
     retires_on: 2026-10-16

@@ -22,7 +22,7 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
 | — | 実装 (主) | Claude Opus 5 (要所は Fable 5.1) | (Claude Code 本体) | 長文推論・コード横断。Opus 4.8 と同価格で能力向上 |
 | 床 (LLM) | 0 次レビュー | ローカル Qwen3-Coder-30B-A3B (vLLM/AWQ 4bit) | `/local-review` | コスト 0、機密データ送信不要、無制限。**199 tok/s**。機密案件は必須 / 公開リポは任意 (§4-1) |
 | 床 | 探索・調査 | Claude Haiku 4.5 (+ 重い探索は Sonnet 5) | `explorer` / `researcher` | 司令塔の文脈とコストを節約 (ADR-0006) |
-| 多様性 | セカンドオピニオン | Codex (既定 GPT-5.6 Sol) | `/codex-review` 他 | Anthropic と別ベンダー、修正提案が具体的。ID は Codex CLI 管理 |
+| 多様性 | セカンドオピニオン | Codex (既定は CLI 管理) | `/codex-review` 他 | Anthropic と別ベンダー、修正提案が具体的。**2026-09-07 実測で既定は `gpt-6-astra`** — フロンティア級の実費で走る (台帳 secondopinion 参照) |
 | 多様性 (高リスク) | フロンティア級の異ベンダー | **GPT-6 Astra** | `/codex-review --astra` | 砦 (Fable 5.1) と同格の非 Anthropic。実費 $10/$50。ADR-0019 |
 | 多様性 | 設計レッドチーム | DeepSeek V4-Pro (思考モード) | `/deepseek-redteam` | 別学習系統で深い問題発見、1 回 2 円前後 |
 | 多様性 | リポ横断 | Gemini 3.1 Pro (入力 1M) | `/gemini-review` | cross-file 視点で唯一無二の指摘 |
@@ -50,7 +50,7 @@ Claude と GPT は学習分布が近く同じ間違い方をしやすいため�
   多様性  異ベンダーを 1 つだけ選ぶ:
             設計を疑う      → /deepseek-redteam
             10+ファイル/drift → /gemini-review
-            実装視点         → /codex-review           (GPT-5.6 Sol)
+            実装視点         → /codex-review           (既定は CLI 管理・現在 gpt-6-astra)
             ★高リスク       → /codex-review --astra   (GPT-6 Astra・実費)
   深さ    /code-review                                   ← 敵対的検証で指摘を絞る
   砦      /fable-review                                  ← 高リスク変更のみ (Fable 5.1)
