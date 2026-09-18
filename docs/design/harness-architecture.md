@@ -147,7 +147,8 @@ plugin 化には未解決の前提が 4 つある。**すべて解消するま�
 3. **判定**: cwd の repo と送信対象のすべてのパスの区分を解決し、**最も厳しいもの**で「そのベンダーに送ってよいか」を台帳 (§6-3) で判定する (Fable A-5: 公開 repo から別の機密 repo を送る動線)
    - **対象パスの受け渡し契約**: 送信するスキルは事前チェックの前に `HARNESS_EGRESS_TARGETS` (送る対象のパスをコロン区切り) を export する。事前チェック (`--target`) と送信ヘルパの両方がこれを読む。既存のヘルパは認証情報と curl 引数しか受け取らず、送る内容の出所を知らないため (codex-review P2)
    - 未設定なら cwd の repo だけで判定する。**事前チェックを飛ばし、かつ環境変数も無いまま別 repo のコードを送ると検知できない** — これは残余リスクとして受け入れる
-4. **記録**: 警告と判定不能を `~/.local/state/agent-rules/egress.log` に残す (案件名を含むためローカルのみ)
+4. **記録**: 警告と判定不能を `~/.local/state/agent-rules/egress.log` に残す (案件名を含むためローカルのみ)。事前チェック (`--preflight`) は記録せず、実際の送信側だけを数える (二重計上しない)
+6. **判定対象の拾い方** (codex-review 指摘を反映): cwd は常に含める。curl は引数を解析し、本文を送る呼び出しの宛先だけを見る (値を取るオプションの値を宛先と誤認しない・`--url=` 等の表記も扱う)。Codex は `-C` / `--cd` / `--add-dir` で指定されたディレクトリも対象に加える
 5. **既存の非常口 (`KEY=` を空にする) は残す**。「伝える」だけでなく本当に止めたいときの手段として
 
 警告の例:
@@ -161,17 +162,21 @@ plugin 化には未解決の前提が 4 つある。**すべて解消するま�
 
 どのヘルパ・エンドポイントがどのベンダーへ送るかと、区分ごとに**警告なしで**送ってよいベンダーを 1 か所で持つ (モデル台帳と同じ規律・直書き禁止)。
 
+実装は [`config/egress.yml`](../../config/egress.yml) が正。要点:
+
 ```yaml
 vendors:
-  deepseek: { endpoints: [api.deepseek.com] }
-  google:   { endpoints: [generativelanguage.googleapis.com] }
-  openai:   { endpoints: [api.openai.com, chatgpt.com], cli: [codex] }
-  local:    { endpoints: [localhost, 127.0.0.1, huggingface.co] }   # vLLM の初回モデル取得を含む
+  deepseek: { name: DeepSeek, hosts: [api.deepseek.com] }
+  google:   { name: Google (Gemini), hosts: [generativelanguage.googleapis.com] }
+  openai:   { name: OpenAI (Codex), hosts: [api.openai.com, chatgpt.com] }
+  local:    { name: ローカル LLM, hosts: [localhost, 127.0.0.1] }
 
-metadata_only:            # 内容を送らない問い合わせ。警告しない (Fable A-9: /status の自動 probe を誤検知しない)
-  rule: no-body           # 主規則: 本文を送らないリクエスト (GET・HEAD、かつ -d/--data*/-F/--json/-T が無い) は警告しない
-  urls:                   # 補助: 本文を送るが内容を含まない既知の問い合わせ (無ければ空)
-    - api.deepseek.com/user/balance
+helpers: [scripts/lib/curl-secret.sh, skills/nano-banana/scripts/nano_banana.py, scripts/codex-run.sh, scripts/codex-astra.sh]
+
+# 内容を送らない問い合わせは警告しない (Fable A-9: /status の自動 probe を誤検知しない)。
+# 主規則は送信ヘルパ側の「本文 (-d/--data*/-F/--json/-T) の無いリクエストは検知しない」。
+# ここには本文を送るが内容を含まない既知の問い合わせだけを載せる (現状は無し)
+metadata_urls: []
 
 allow:                    # 区分ごとに警告なしで送ってよいベンダー (Anthropic はセッション自体なので対象外)
   public:       [deepseek, google, openai, local]
