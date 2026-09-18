@@ -3,7 +3,7 @@ name: nano-banana
 description: Nano Banana 2 (Gemini の画像モデル) でテキストから画像を生成し、参照画像を渡して編集する。バナー・図版・モック・写真加工など「画像そのものを作る/直す」ときに使用。文字を含む図版や納品物は --pro で Nano Banana Pro に切替
 argument-hint: "<プロンプト> [--ref <画像>...] [--pro] [--aspect 16:9] [--size 2K] [-n N] [--outdir DIR | --out FILE]"
 disable-model-invocation: false
-allowed-tools: Bash(uv run --script ~/repos/github.com/elm-inc/agent-rules/skills/nano-banana/scripts/nano_banana.py*) Bash(uv run --script ~/.claude/skills/nano-banana/scripts/nano_banana.py*) Read
+allowed-tools: Bash(uv run --script ~/repos/github.com/elm-inc/agent-rules/skills/nano-banana/scripts/nano_banana.py*) Bash(uv run --script ~/.claude/skills/nano-banana/scripts/nano_banana.py*) Bash(python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py *) Read
 ---
 
 # Nano Banana 2 による画像生成・編集
@@ -53,6 +53,8 @@ Gemini の画像モデルで **テキスト→画像の生成** と **参照画�
 
 1. プロンプトが曖昧なら**先に具体化する**。画像生成は「何を・どんな構図で・どんな質感で」が薄いと平凡な結果に落ちる。ユーザーの意図が 1 行しかないときは、被写体 / 構図 / 光 / 質感 / 用途を補って提案し、合意してから実行する
 2. `uv run --script ~/repos/github.com/elm-inc/agent-rules/skills/nano-banana/scripts/nano_banana.py <プロンプト> [オプション] --json` を実行 (**canonical な絶対パス**。相対パスだと他プロジェクトから呼んだとき cwd 依存で落ちる)
+   - **実行の前に、送信前の区分確認を【別のコマンドとして】実行する** (ADR-0023・止めない): `python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py egress-check --preflight --vendor google --target <参照画像のパス>...`。警告が出たら、送信先と区分をユーザーに一言伝えてから実行に進む (ラッパも送信時に同じ確認をするが、その時点では送信が始まっていて伝える間が無い)
+   - スクリプト自体も送信時に同じ確認をして stderr に警告を出す (止めない)
 3. **生成された画像を Read で必ず確認する。** ファイルが出来たことと、意図どおりの絵が出たことは別物
 4. 意図と違えば、プロンプトを直すか、**生成物を `--ref` に渡して差分指示で追い込む** (作り直すより編集の方が構図が安定する)
 5. 保存先とモデル、追い込んだ場合はその経緯をユーザーに報告する

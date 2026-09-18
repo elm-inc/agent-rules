@@ -3,7 +3,7 @@ name: deepseek-redteam
 description: DeepSeek V4-Pro (思考モード) で設計やコード変更の盲点・代替案・破綻ケースを炙り出すレッドチーム。docs/design/*.md や差分に対して「致命的な見落としは?」を問う。Anthropic/OpenAI 系と異なる学習分布なので groupthink 対策に有効
 argument-hint: "<対象ファイル | --diff [--base <branch>] | --design <path>> [+ 観点]"
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(ls *) Read
+allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(ls *) Bash(python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py *) Read
 ---
 
 # DeepSeek V4-Pro によるレッドチーム
@@ -111,7 +111,18 @@ cat "$FILE_PATH"
 
 ### 4. DeepSeek API 呼び出し
 
+**送信の前に、外部送信の区分を確認する** (ADR-0023・止めない)。送る対象 (設計 doc・ファイル、差分ならその repo) のパスを `HARNESS_EGRESS_TARGETS` に入れて事前チェックを実行する:
+
 ```bash
+export HARNESS_EGRESS_TARGETS="<送る対象のパス。複数はコロン区切り>"
+python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py egress-check --preflight --vendor deepseek
+```
+
+- 警告が出たら、**送信先と区分をユーザーに一言伝えてから続行する** (確認待ちで止めない。止めたいときはユーザーが中断する)
+- 同じ `export` を下の送信ブロックの先頭にも書く (Bash の呼び出しをまたぐと環境変数は消える。送信ヘルパも同じ判定を行う)
+
+```bash
+export HARNESS_EGRESS_TARGETS="<上と同じ>"
 PAYLOAD=$(jq -n \
   --arg content "$PROMPT" \
   '{
@@ -122,7 +133,7 @@ PAYLOAD=$(jq -n \
     max_tokens: 32000
   }')
 
-. "$(git rev-parse --show-toplevel)/scripts/lib/curl-secret.sh"   # Issue #40: 鍵を argv に載せない
+. ~/repos/github.com/elm-inc/agent-rules/scripts/lib/curl-secret.sh   # Issue #40: 鍵を argv に載せない / ADR-0023: 区分の確認を内蔵
 RESPONSE=$(curl_auth_bearer "$DEEPSEEK_API_KEY" -sf --max-time 600 \
   https://api.deepseek.com/v1/chat/completions \
   -H "Content-Type: application/json" \

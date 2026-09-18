@@ -3,7 +3,7 @@ name: gemini-review
 description: Gemini 3.1 Pro の長文コンテキスト (入力 1M token) でリポジトリ横断レビューを行う。大規模リファクタ・複数ファイルの整合性・ADR とコードの drift・全体アーキテクチャ検証など、Claude/Codex の通常コンテキストに収まらない範囲で使う
 argument-hint: "[--scope <path or glob> | --diff [--base <branch>] | --adr <path>] [+ 観点]"
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Read
+allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py *) Read
 ---
 
 # Gemini 3.1 Pro による長文コンテキスト・リポジトリ横断レビュー
@@ -141,7 +141,18 @@ echo "## 関連コード (ADR で言及されているパス配下)"
 > - **`thinkingConfig.thinkingBudget: 0` は 3.1 Pro では使えない** — `400 Budget 0 is invalid. This model only works in thinking mode.` になる。
 >   コストを絞るときは `thinkingConfig.thinkingLevel` を使う (`low` / `medium` / `high` の 3 値。`minimal` は拒否される。2026-08-17 実測)
 
+**送信の前に、外部送信の区分を確認する** (ADR-0023・止めない)。送る対象 (収集した repo・ファイル) のパスを `HARNESS_EGRESS_TARGETS` に入れて事前チェックを実行する:
+
 ```bash
+export HARNESS_EGRESS_TARGETS="<送る対象のパス。複数はコロン区切り>"
+python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py egress-check --preflight --vendor google
+```
+
+- 警告が出たら、**送信先と区分をユーザーに一言伝えてから続行する** (確認待ちで止めない。止めたいときはユーザーが中断する)
+- 同じ `export` を下の送信ブロックの先頭にも書く (Bash の呼び出しをまたぐと環境変数は消える。送信ヘルパも同じ判定を行う)
+
+```bash
+export HARNESS_EGRESS_TARGETS="<上と同じ>"
 PAYLOAD=$(jq -n \
   --arg content "$PROMPT" \
   '{
@@ -152,7 +163,7 @@ PAYLOAD=$(jq -n \
     }
   }')
 
-. "$(git rev-parse --show-toplevel)/scripts/lib/curl-secret.sh"   # Issue #40: 鍵を argv/URL に載せない
+. ~/repos/github.com/elm-inc/agent-rules/scripts/lib/curl-secret.sh   # Issue #40: 鍵を argv/URL に載せない / ADR-0023: 区分の確認を内蔵
 RESPONSE=$(curl_auth_header "x-goog-api-key" "$GEMINI_API_KEY" -sf --max-time 600 \
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent" \
   -H "Content-Type: application/json" \

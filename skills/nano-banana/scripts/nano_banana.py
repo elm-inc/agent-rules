@@ -29,7 +29,7 @@ Usage:
 """
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["httpx>=0.27"]
+# dependencies = ["httpx>=0.27", "pyyaml>=6"]  # pyyaml は外部送信の検知器 (harness.py) 用
 # ///
 
 from __future__ import annotations
@@ -40,6 +40,7 @@ import json
 import mimetypes
 import os
 import re
+import subprocess
 import sys
 import unicodedata
 from datetime import datetime
@@ -48,6 +49,8 @@ from pathlib import Path
 import httpx
 
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
+# 外部送信の検知器 (ADR-0023)。~/.claude/skills の symlink 経由でも実体の repo を指す
+HARNESS = Path(__file__).resolve().parents[3] / "scripts" / "harness.py"
 
 # config/models.yml の active と一致させること (単一ソースは台帳)
 MODEL_DEFAULT = "gemini-3.1-flash-image"  # Nano Banana 2
@@ -125,6 +128,21 @@ def build_payload(
         gen_cfg["imageConfig"] = image_cfg
 
     return {"contents": [{"parts": parts}], "generationConfig": gen_cfg}
+
+
+def egress_check(refs: list[Path]) -> None:
+    """送る前に外部送信の区分を確認する (ADR-0023)。stderr で伝えるだけで、止めない。
+
+    送る内容はプロンプト (cwd の文脈) と参照画像なので、cwd と参照画像の両方の区分を見る。
+    """
+    # uv run の隔離環境では PATH 上の python3 も同じ環境になる。依存を宣言した sys.executable で動かす
+    cmd = [sys.executable, str(HARNESS), "egress-check", "--vendor", "google"]
+    for t in refs:  # cwd は検知器が常に含める
+        cmd += ["--target", str(t)]
+    try:
+        subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=sys.stderr, timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError):
+        print("⚠ 外部送信の確認 (ADR-0023): 検知器 (harness.py) を起動できず、区分を判定できませんでした", file=sys.stderr)
 
 
 def call_api(model: str, payload: dict, key: str) -> dict:
@@ -264,6 +282,7 @@ def main() -> int:
     key = resolve_api_key()
     payload = build_payload(args.prompt, refs, args.aspect, args.size)
     slug = slugify(args.prompt)
+    egress_check(refs)
 
     all_saved: list[Path] = []
     all_texts: list[str] = []

@@ -3,7 +3,7 @@ name: test-generate
 description: テスト観点の列挙とテスト実装を生成する。--brainstorm で複数 LLM (DeepSeek V4-Flash + ローカル Qwen + 任意で Gemini) を実行して観点を多面化、--implement で観点ファイルからコード生成。引数なしは旧挙動 (列挙 + 実装を 1 ステップで、Qwen 単独)
 argument-hint: "<対象> [--brainstorm | --implement <観点ファイル>] [--with-gemini] [--property] [--mutants <list>]"
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(flock *) Bash(docker *) Bash(bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh*) Read Write Edit
+allowed-tools: Bash(git *) Bash(curl *) Bash(jq *) Bash(cat *) Bash(find *) Bash(ls *) Bash(grep *) Bash(flock *) Bash(docker *) Bash(bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh*) Bash(python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py *) Read Write Edit
 ---
 
 # テスト観点列挙 + 実装生成 (多モデル対応)
@@ -107,7 +107,18 @@ property-based テストライブラリも検出 (pytest→hypothesis / vitest+j
 
 #### B-1-b. モデル別実行 (順次 swap)
 
+**送信の前に、外部送信の区分を確認する** (ADR-0023・止めない)。送る対象 (テスト対象のコード) のパスを `HARNESS_EGRESS_TARGETS` に入れて事前チェックを実行する:
+
 ```bash
+export HARNESS_EGRESS_TARGETS="<送る対象のパス。複数はコロン区切り>"
+python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py egress-check --preflight --vendor deepseek  # --with-gemini なら --vendor google も
+```
+
+- 警告が出たら、**送信先と区分をユーザーに一言伝えてから続行する** (確認待ちで止めない。止めたいときはユーザーが中断する)
+- 同じ `export` を下の送信ブロックの先頭にも書く (Bash の呼び出しをまたぐと環境変数は消える。送信ヘルパも同じ判定を行う)
+
+```bash
+export HARNESS_EGRESS_TARGETS="<上と同じ>"
 BRAINSTORM_TMP=$(mktemp -d)
 
 # 0. API キー解決: 環境変数 → ~/.*_token (perms 600) の順。
@@ -124,7 +135,7 @@ fi
 # 1. DeepSeek V4-Flash (API、思考モード)
 #    観点の「拡散」が目的なので V4-Pro ではなく 1 桁安い Flash を使う
 if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
-  . "$(git rev-parse --show-toplevel)/scripts/lib/curl-secret.sh"   # Issue #40: 鍵を argv に載せない
+  . ~/repos/github.com/elm-inc/agent-rules/scripts/lib/curl-secret.sh   # Issue #40: 鍵を argv に載せない / ADR-0023: 区分の確認を内蔵
   curl_auth_bearer "$DEEPSEEK_API_KEY" -sf --max-time 600 \
     https://api.deepseek.com/v1/chat/completions \
     -H "Content-Type: application/json" \
