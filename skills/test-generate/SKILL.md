@@ -132,14 +132,15 @@ if [ -z "${GEMINI_API_KEY+set}" ] && [ -f ~/.gemini_token ]; then
   GEMINI_API_KEY="$(cat ~/.gemini_token)"
 fi
 
-# 1. DeepSeek V4-Flash (API、思考モード)
+# 1. DeepSeek Flash (API、思考モード)
 #    観点の「拡散」が目的なので V4-Pro ではなく 1 桁安い Flash を使う
+#    ID は 2026-09-20 に deepseek-v4-flash から改名 (config/models.yml)。 <!-- model-doctor:allow (改名前の ID を履歴として言及) -->
 if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
   . ~/repos/github.com/elm-inc/agent-rules/scripts/lib/curl-secret.sh   # Issue #40: 鍵を argv に載せない / ADR-0023: 区分の確認を内蔵
   curl_auth_bearer "$DEEPSEEK_API_KEY" -sf --max-time 600 \
     https://api.deepseek.com/v1/chat/completions \
     -H "Content-Type: application/json" \
-    -d "$(jq -n --arg c "$PROMPT" '{model:"deepseek-v4-flash", thinking:{type:"enabled"}, reasoning_effort:"high", messages:[{role:"user", content:$c}], max_tokens:6000}')" \
+    -d "$(jq -n --arg c "$PROMPT" '{model:"deepseek-flash", thinking:{type:"enabled"}, reasoning_effort:"high", messages:[{role:"user", content:$c}], max_tokens:6000}')" \
     | jq -r '.choices[0].message.content' > "$BRAINSTORM_TMP/deepseek.md"
 fi
 

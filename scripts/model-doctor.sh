@@ -74,8 +74,22 @@ run_drift() {
   # モデル ID らしき文字列だけを狙い撃つ (skill 名 "deepseek-redteam" 等を拾わない)
   # HF org は vllm-verify-model.sh の許可 org を必ず包含すること
   # (許可したのにパターンに無い = 検査されない、という穴を作らない)
+  #
+  # deepseek だけ「名前の列挙」ではなく「一般化 + 除外」にしている (2026-09-20):
+  #   deepseek-v4-flash → deepseek-flash の改名で、旧パターン
+  #   `deepseek-(reasoner|chat|v[0-9]...)` が新 ID を 1 つも拾えず、
+  #   **検査すべき呼び出しだけが検査対象から外れていた** (codex-review 指摘)。
+  #   列挙方式は「ベンダーが名前を変えるたびに静かに穴が空く」= ADR-0017 が
+  #   防ごうとした事故そのもの。一般化すると失敗の向きが
+  #   「見逃し (気づけない)」から「誤検知 (すぐ分かる)」に変わる。
+  #   誤検知はこの除外リストに足して潰す。
   local hf_orgs='RedHatAI|Qwen|nvidia|mistralai|google|meta-llama|deepseek-ai|cyankiwi|unsloth|lmstudio-community|mlx-community|zai-org'
-  local pattern="claude-(opus|sonnet|haiku|fable|mythos)-[0-9][a-zA-Z0-9.-]*|deepseek-(reasoner|chat|v[0-9][a-zA-Z0-9.-]*)|gemini-[0-9][a-zA-Z0-9.-]*|gpt-[0-9][a-zA-Z0-9.-]*|(${hf_orgs})/[A-Za-z0-9._-]+"
+  local pattern="claude-(opus|sonnet|haiku|fable|mythos)-[0-9][a-zA-Z0-9.-]*|deepseek-[a-zA-Z][a-zA-Z0-9.-]*|gemini-[0-9][a-zA-Z0-9.-]*|gpt-[0-9][a-zA-Z0-9.-]*|(${hf_orgs})/[A-Za-z0-9._-]+"
+
+  # モデル ID ではないが同じ接頭辞を持つ語 (skill 名・HF org 単体の言及)。
+  # 一般化パターンの誤検知だけをここで落とす。**新しいモデル名をここに足さないこと**
+  # (足した瞬間、その ID は検査されなくなる)。
+  local non_models='deepseek-redteam|deepseek-ai'
 
 
   # 除外: 台帳そのものと、パターン定義を持つ本スクリプト (自己言及で誤検知するため)
@@ -116,7 +130,8 @@ run_drift() {
             | xargs -0 grep -hE "$pattern" 2>/dev/null "${excludes[@]}" \
             | grep -v 'model-doctor:allow' \
             | grep -oE "$pattern" \
-            | sed 's/[.,)"'"'"'`]*$//' | sort -u)"
+            | sed 's/[.,)"'"'"'`]*$//' \
+            | grep -vxE "$non_models" | sort -u)"
   else
     # git 管理外で実行された場合のフォールバック (従来どおりの再帰走査)。
     # gitignore は効かないので、代表的な vendor ディレクトリだけ明示除外する。
@@ -125,7 +140,8 @@ run_drift() {
             --exclude-dir=.venv --exclude-dir=vendor --exclude-dir=dist \
             | grep -v 'model-doctor:allow' \
             | grep -oE "$pattern" \
-            | sed 's/[.,)"'"'"'`]*$//' | sort -u)"
+            | sed 's/[.,)"'"'"'`]*$//' \
+            | grep -vxE "$non_models" | sort -u)"
   fi
 
   # fail-close: 0 件は「健全」ではなく「検査が壊れた」と解釈する。
