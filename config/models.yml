@@ -12,9 +12,15 @@
 #   - `retired:` は「かつて使っていた ID」。docs/adr の履歴記述と突き合わせるための記録で、
 #     operational surface (skills/ scripts/ CLAUDE.md) に現れたら CI が落とす
 #
+# probe の限界 (2026-09-20 に実測で判明):
+#   --probe は `/v1/models` の一覧と照合する。**一覧に無い = 使えない、ではない。**
+#   deepseek-v4-flash は一覧から消えた後も実呼び出しでは応答した (未掲載のまま生存)。
+#   「存在しません」が出たら、退役と決めつける前に実際に 1 回呼んで確かめること。
+#   逆方向の穴もある: 一覧にあっても権限が無ければ 403 になる (プラン差)。
+#
 # 四半期見直し: 次回 2026-11
 
-updated: 2026-09-06
+updated: 2026-09-20
 
 # --- 稼働中のモデル -------------------------------------------------------
 active:
@@ -84,10 +90,16 @@ active:
   # テスト観点の多面出し (安価・大量)
   - key: brainstorm
     vendor: deepseek
-    id: deepseek-v4-flash
+    id: deepseek-flash
     layer: 多様性
     params: '{"thinking":{"type":"enabled"},"reasoning_effort":"high"}'
-    note: "DeepSeek-V4-Flash-0731。V4-Pro より 1 桁安い。観点の拡散用"
+    note: >-
+      V4-Pro より 1 桁安い。観点の拡散用。
+      **2026-09-20 に deepseek-v4-flash から改名** (上流の `/v1/models` は
+      deepseek-flash / deepseek-v4-pro の 2 つのみ)。同日、本機から実呼び出しで
+      上記 params が通ることを確認 (reasoning_tokens が返る)。
+      旧 ID `deepseek-v4-flash` は**一覧から消えた後も応答する**ため、
+      probe の「存在しません」だけで退役と判断しない (ヘッダの probe の限界を参照)
 
   # リポ横断レビュー (長文コンテキスト)
   - key: crossfile
@@ -97,7 +109,9 @@ active:
     note: >-
       入力 1,048,576 tok / 出力 65,536 tok (API 実測)。thinking 既定 ON で
       1 tok の応答にも 100+ thinking tok を消費するため maxOutputTokens は潤沢に。
-      gemini-2.5-pro は 2026-10-16 退役予定
+      gemini-2.5-pro は 2026-10-16 退役予定。
+      2026-09-20 の上流一覧では 3.5〜3.8 は flash 系のみで、**pro 系は 3.1 が最新**。
+      据え置きでよい (次の四半期見直しで再確認)
 
   # セカンドオピニオン (異ベンダー・実装視点)
   - key: secondopinion
@@ -157,7 +171,13 @@ retired:
   - id: deepseek-chat
     vendor: deepseek
     retired_on: 2026-07-24
-    successor: deepseek-v4-flash
+    successor: deepseek-flash
+  - id: deepseek-v4-flash
+    vendor: deepseek
+    successor: deepseek-flash
+    # 上流の /v1/models からは 2026-09-20 までに消えたが、実呼び出しでは応答する
+    # (改名であって退役ではない)。本リポの既定から外しただけなので active_upstream。
+    status: active_upstream
   - id: gemini-2.5-pro
     vendor: gemini
     retires_on: 2026-10-16
