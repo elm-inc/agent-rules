@@ -1,0 +1,30 @@
+name: harness-test
+
+# 外部 LLM への送信の検知 (ADR-0023) を PR で機械検証する。
+#
+# 検出したいもの:
+#   1. 検知器 (scripts/harness.py・curl-secret.sh) の判定が壊れる — 壊れても実行時エラーにならず、
+#      「警告が出ない」だけになるので目視では気づけない
+#   2. 送信ヘルパを経由しない外部送信がスキル/スクリプトに新しく書かれる — その経路だけ黙って検知から漏れる
+on:
+  pull_request:
+    paths:
+      - "config/egress.yml"
+      - "scripts/**"
+      - "skills/**"
+      - "agents/**"
+      - ".github/workflows/harness-test.yml"
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet pyyaml
+      - name: 検知器の回帰テスト (実際の送信はしない)
+        run: python3 scripts/test-harness.py
+      - name: 送信がすべてヘルパを通っているか (コーパス試験)
+        run: python3 scripts/test-egress-corpus.py

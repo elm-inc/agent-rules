@@ -1,0 +1,3 @@
+# ハーネスの宣言 (ADR-0023)。agent-rules は public repo なので外部 LLM への送信で警告しない
+harness: 1
+sensitivity: public

@@ -3,7 +3,7 @@ name: codex-review
 description: Codex CLI にコードレビューを依頼する。コードの変更内容をレビューしてほしい、Codex にレビューさせたい、セカンドオピニオンがほしいときに使用。--astra で GPT-6 Astra (フロンティア級・実費) に格上げして高リスク差分をレビューする
 argument-hint: "[レビュー対象や追加指示（例: --base main, --uncommitted, --astra, セキュリティ観点で）]"
 disable-model-invocation: false
-allowed-tools: Bash(codex *) Bash(git *) Bash(*/codex-astra.sh *) Bash(*/frontier-usage.sh *)
+allowed-tools: Bash(~/repos/github.com/elm-inc/agent-rules/scripts/codex-run.sh *) Bash(python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py *) Bash(git *) Bash(*/codex-astra.sh *) Bash(*/frontier-usage.sh *)
 ---
 
 # Codex CLI によるコードレビュー
@@ -44,7 +44,7 @@ Codex CLI の `review` サブコマンドを使ってコードレビューを実
 2. **スコープ指定のみ** (`--uncommitted` / `--base <branch>` / `--commit <sha>`)
    → そのフラグ単独で実行する
 3. **カスタム指示のみ** (フラグを含まないテキスト)
-   → `codex review "<指示>"` で実行する。スコープは **uncommitted 既定**
+   → `codex-run.sh review "<指示>"` で実行する。スコープは **uncommitted 既定**
 4. **両方が混在** (例: `--base main セキュリティ観点で`)
    → **そのままでは実行できない。組み立てて失敗させないこと。**
    - `--uncommitted` との混在なら、既定スコープが同じなのでフラグを落として 3 の形にする
@@ -59,9 +59,10 @@ Codex CLI の `review` サブコマンドを使ってコードレビューを実
    - **あり**: 高リスク変更の条件に該当するかを確認し、該当理由と「なぜ Sol では不足か」を一言宣言してから進む。
      該当しないのに `--astra` が付いていたら、実費である旨を伝えて Sol で回すことを提案する
    - **なし**: 通常どおり Sol で回す
-3. 残りの引数を解釈して適切な `codex review` コマンドを組み立てる
+3. 残りの引数を解釈して適切な `codex-run.sh review` コマンドを組み立てる
+   - **実行の前に、送信前の区分確認を【別のコマンドとして】実行する** (ADR-0023・止めない): `python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py egress-check --preflight --vendor openai`。警告が出たら、送信先と区分をユーザーに一言伝えてから実行に進む (ラッパも送信時に同じ確認をするが、その時点では送信が始まっていて伝える間が無い)
 4. 実行する（デフォルトは `--uncommitted`）
-   - Sol: `codex review ...`
+   - Sol: `~/repos/github.com/elm-inc/agent-rules/scripts/codex-run.sh review ...` — **素の `codex` を直接呼ばない** (送信前の区分確認が抜ける・ADR-0023)。区分の警告が出たら、ユーザーに一言伝えてから続ける
    - Astra: `./scripts/codex-astra.sh review ...` (agent-rules リポの scripts/ を指す)
 5. Codex の出力をそのままユーザーに表示する
 6. `--astra` を使った場合は、実行後に `scripts/frontier-usage.sh` で当月のフロンティア枠を確認して添える
@@ -69,17 +70,19 @@ Codex CLI の `review` サブコマンドを使ってコードレビューを実
 ## コマンド例
 
 ```bash
+CODEX=~/repos/github.com/elm-inc/agent-rules/scripts/codex-run.sh   # 送信前の区分確認を内蔵 (ADR-0023)
+
 # uncommitted な変更をレビュー
-codex review --uncommitted
+"$CODEX" review --uncommitted
 
 # main ブランチとの差分をレビュー
-codex review --base main
+"$CODEX" review --base main
 
 # 特定コミットをレビュー
-codex review --commit abc1234
+"$CODEX" review --commit abc1234
 
 # カスタム指示付きレビュー (スコープは uncommitted 既定。フラグは付けられない)
-codex review "セキュリティの観点でレビューしてください"
+"$CODEX" review "セキュリティの観点でレビューしてください"
 
 # --- 高リスク変更のみ: GPT-6 Astra に格上げ (実費・台帳記録あり) ---
 ./scripts/codex-astra.sh review --base main

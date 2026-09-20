@@ -48,6 +48,15 @@ fi
 
 [ "$#" -gt 0 ] || { echo "usage: $0 <codex サブコマンドと引数>" >&2; exit 2; }
 
+# --- 外部送信の確認 (ADR-0023) ----------------------------------------------
+# Codex はリポジトリの内容を OpenAI に送る。区分に照らして送信前に伝える (止めない)。
+_harness="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/harness.py"
+if command -v python3 >/dev/null 2>&1 && [ -f "$_harness" ]; then
+  python3 "$_harness" egress-check --vendor openai --codex -- "$@" </dev/null >&2 || true
+else
+  echo "⚠ 外部送信の確認 (ADR-0023): 検知器 (harness.py) を起動できず、区分を判定できませんでした" >&2
+fi
+
 mkdir -p "$CACHE_DIR" 2>/dev/null || { echo "台帳ディレクトリを作成できません: $CACHE_DIR" >&2; exit 1; }
 out_tmp="$(mktemp "${TMPDIR:-/tmp}/codex-astra.XXXXXX")" || exit 1
 trap 'rm -f "$out_tmp"' EXIT

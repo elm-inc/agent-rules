@@ -1,0 +1,48 @@
+# 送信先台帳 — 外部 LLM への送信を検知して伝えるための単一ソース (根拠: ADR-0023)
+#
+# 目的:
+#   Claude Code の通常利用での「うっかり送信」(機密の案件で外部 LLM に送るスキルを使う等) を、
+#   送信の【前に】伝える。**遮断はしない** (ユーザー判断: 強い規制は作業そのものを止める)。
+#
+# 読み手:
+#   scripts/harness.py — 送信ヘルパ (scripts/lib/curl-secret.sh・nano_banana.py・codex-run.sh・
+#   codex-astra.sh) とスキルの事前チェックから呼ばれる。
+#
+# 運用:
+#   - 外部 LLM に送るスキル/スクリプトを足したら、ここにベンダーを足し、送信は必ずヘルパ経由にする。
+#     scripts/test-egress-corpus.py が CI で「ヘルパを経由しない送信」を落とす
+#   - Anthropic は Claude Code のセッション自体が使うベンダーなので対象外
+
+updated: 2026-09-18
+
+vendors:
+  deepseek:
+    name: DeepSeek
+    hosts: [api.deepseek.com]
+  google:
+    name: Google (Gemini)
+    hosts: [generativelanguage.googleapis.com]
+  openai:
+    name: OpenAI (Codex)
+    hosts: [api.openai.com, chatgpt.com]
+  local:
+    name: ローカル LLM
+    hosts: [localhost, 127.0.0.1]
+
+# 送信ヘルパ。この中にある送信だけがコーパス試験で許される
+helpers:
+  - scripts/lib/curl-secret.sh
+  - skills/nano-banana/scripts/nano_banana.py
+  - scripts/codex-run.sh
+  - scripts/codex-astra.sh
+
+# 本文を送る (POST 等) が内容を含まない既知の問い合わせ。
+# 本文の無い GET (モデル存在確認・残高確認) は最初から検知の対象外なので、ここには載せなくてよい
+metadata_urls: []
+
+# 区分ごとに「警告なしで」送ってよいベンダー
+allow:
+  public:       [deepseek, google, openai, local]
+  internal:     [google, openai, local]      # DeepSeek だけ警告 (2026-09-18 決定)
+  confidential: [local]
+  undeclared:   [local]                      # 未宣言・判定不能は confidential と同じ扱い

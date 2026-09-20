@@ -108,6 +108,20 @@ bash "$AGENT_RULES/scripts/linear-audit.sh"
 > Linear 側にしか無い情報 (例: In Progress のまま放置された Issue で、ローカルに痕跡が無いもの) は
 > このスクリプトでは検出できない。気になるときは `/linear-status` で Linear 側から見る。
 
+### 3-d. 外部送信の検知 (ADR-0023)
+
+外部 LLM への送信は、repo の機密区分 (`.harness.yml`) に照らして**送信前に伝える** (遮断はしない)。
+検知は黙って止まると「警告が出ない = 問題なし」に見えてしまうため、計器を毎セッション見る:
+
+```bash
+AGENT_RULES=~/repos/github.com/elm-inc/agent-rules
+python3 "$AGENT_RULES/scripts/harness.py" status
+```
+
+- **出力があったときだけ** `## ⚠ 注意` に出す。平時は無音
+- 「区分が未宣言の repo」が出たら `/harness-audit` を提案する (未宣言は confidential 扱いで、送信のたびに警告が出る)
+- 「送信先台帳を読めません」は**検知が止まっている**ことを意味する。注意の先頭に出す
+
 ### 4. 出力フォーマット
 
 以下の markdown を出力する (セクションに情報がなければ省略):

@@ -23,6 +23,23 @@
 #   - stdin を使う呼び出し (-d @-) とは併用できる (--config はプロセス置換で
 #     別の fd を使うため stdin を奪わない)。
 
+# --- 外部送信の検知 (ADR-0023) ------------------------------------------------
+# curl の引数を scripts/harness.py に渡し、本文を送る呼び出し (-d/--data*/-F/--json/-T) だけを
+# .harness.yml の区分に照らして許可外なら【送信の前に】stderr で伝える。
+# **遮断はしない** (うっかり送信を伝える Sensor)。本文の無い GET (モデル存在確認・残高確認) は
+# 内容を送らないので対象外 — /status の自動 probe で誤警告しない。
+# 検知器を起動できないときも黙らない (壊れているのに動いて見える状態を作らない)。
+_curl_secret_harness="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/harness.py"
+_curl_secret_egress_check() {
+  # 引数の解析 (本文の有無・宛先・値を取るオプション) は harness.py 側で行う (テストで固定するため)
+  if command -v python3 >/dev/null 2>&1 && [ -f "$_curl_secret_harness" ]; then
+    python3 "$_curl_secret_harness" egress-check --curl -- "$@" </dev/null >&2 || true
+  else
+    echo "⚠ 外部送信の確認 (ADR-0023): 検知器 (harness.py) を起動できず、区分を判定できませんでした" >&2
+  fi
+  return 0
+}
+
 # 秘密として妥当か検査する。壊れた config を作らせない。
 _curl_secret_validate() {
   case "$1" in
@@ -36,6 +53,7 @@ _curl_secret_validate() {
 curl_auth_header() {
   local name="$1" secret="$2"; shift 2
   _curl_secret_validate "$secret" || return 1
+  _curl_secret_egress_check "$@"
   curl --config <(printf 'header = "%s: %s"\n' "$name" "$secret") "$@"
 }
 

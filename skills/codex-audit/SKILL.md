@@ -3,7 +3,7 @@ name: codex-audit
 description: Codex CLI にプロジェクト全体の設計・実装の網羅的レビューを依頼する。コード全体をレビューしたい、設計を見直したい、品質監査をしたいときに使用
 argument-hint: "[レビュー観点（例: セキュリティ, パフォーマンス, アーキテクチャ）]"
 disable-model-invocation: false
-allowed-tools: Bash(codex *) Bash(git *)
+allowed-tools: Bash(~/repos/github.com/elm-inc/agent-rules/scripts/codex-run.sh *) Bash(python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py *) Bash(git *)
 ---
 
 # Codex CLI によるプロジェクト全体レビュー
@@ -30,14 +30,15 @@ Codex CLI の `exec` サブコマンドを使い、プロジェクト全体の�
 
 1. 現在のプロジェクト構成を `git status` と `ls` で把握する
 2. 引数から観点を解釈し、Codex に渡すプロンプトを組み立てる
-3. `codex exec --sandbox read-only` で実行する (監査は読むだけ。書き込ませない)
+   - **実行の前に、送信前の区分確認を【別のコマンドとして】実行する** (ADR-0023・止めない): `python3 ~/repos/github.com/elm-inc/agent-rules/scripts/harness.py egress-check --preflight --vendor openai`。警告が出たら、送信先と区分をユーザーに一言伝えてから実行に進む (ラッパも送信時に同じ確認をするが、その時点では送信が始まっていて伝える間が無い)
+3. `~/repos/github.com/elm-inc/agent-rules/scripts/codex-run.sh exec --sandbox read-only` で実行する (監査は読むだけ。書き込ませない)。**素の `codex` を直接呼ばない** (送信前の区分確認が抜ける・ADR-0023)。区分の警告が出たら、ユーザーに一言伝えてから続ける
 4. 結果をユーザーに表示する
 
 ## プロンプトの組み立て
 
 引数なし（総合レビュー）の場合:
 ```bash
-codex exec --sandbox read-only "このプロジェクト全体の設計と実装を網羅的にレビューしてください。以下の観点で問題点・改善案を報告してください:
+~/repos/github.com/elm-inc/agent-rules/scripts/codex-run.sh exec --sandbox read-only "このプロジェクト全体の設計と実装を網羅的にレビューしてください。以下の観点で問題点・改善案を報告してください:
 1. アーキテクチャ・設計（ディレクトリ構成、モジュール分割、依存関係）
 2. コード品質（可読性、重複、命名規則）
 3. セキュリティ（脆弱性、認証・認可、入力検証）
@@ -49,7 +50,7 @@ codex exec --sandbox read-only "このプロジェクト全体の設計と実装
 
 観点指定ありの場合:
 ```bash
-codex exec --sandbox read-only "このプロジェクト全体を「{指定された観点}」の観点で網羅的にレビューしてください。問題点・改善案を重要度（高/中/低）付きで報告してください。日本語で回答してください。"
+~/repos/github.com/elm-inc/agent-rules/scripts/codex-run.sh exec --sandbox read-only "このプロジェクト全体を「{指定された観点}」の観点で網羅的にレビューしてください。問題点・改善案を重要度（高/中/低）付きで報告してください。日本語で回答してください。"
 ```
 
 ## 注意事項
