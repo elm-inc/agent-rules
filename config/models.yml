@@ -78,6 +78,52 @@ active:
       max_model_len 4096 が律速だった (ADR-0001 の積み残し) → 速度 33 倍・context 22 倍。
       NVIDIA 公式の NVFP4 版 (35B-A3B / 27B) は同環境で両方 OOM したため不採用 (ADR-0017)。
 
+  # 日本語の記述生成 (評価中・ai-trading-platform の企業分析用)
+  #
+  # **なぜ足すか**: 既定の `local` は coder モデルで、日本語の散文を書かせると
+  # 中国語が混ざる。ai-trading-platform で全社 3,718 社を生成したとき
+  # **22.3% (829 社)** に `84130百万元` (通貨の取り違え) や `東京证券交易所`
+  # (簡体字) が出た。プロンプトで抑え込めたが、モデル側の適性を比べるために登録する。
+  - key: local-ja-general
+    vendor: huggingface
+    id: cyankiwi/Qwen3.6-27B-AWQ-INT4
+    # commit pin (必須): 公式 org ではないため「この 1 コミットだけ」を信頼する
+    revision: e5cc0400fb2403c437c2c40a7c52fb5ae93fda18
+    layer: 床
+    served_as: qwen-27b
+    note: >-
+      汎用 (coder ではない) Qwen3.6 27B の AWQ INT4。
+      **本機では使えない**: 2026-09-22 実測で重みが VRAM 28GB を占め OOM
+      (max_len を 8192 に落としても KV cache が確保できない)。
+      27B クラスが 32GB に載らないのは NVFP4 版と同じ (ADR-0017 の記録と一致)。
+
+  - key: local-ja-native
+    vendor: huggingface
+    id: tokyotech-llm/Llama-3.1-Swallow-8B-Instruct-v0.3
+    revision: 0858f50ecfbc61eab25f353013e0be542e1312ac
+    layer: 床
+    served_as: swallow-8b
+    note: >-
+      日本語継続事前学習 (Llama-3.1 ベース)。fp16 約 16GB / max_position_embeddings=8192。
+      2026-09-22 実測 (同一 40 社): 中国語混入 0 / 材料の誤読 0 / 5.9 秒per社 / 340 字。
+      **日本語特化は有効だが必須ではない** — 英語主体の gemma-3-12b が
+      同じく汚染 0・誤読 0 でより詳しい (414 字) 記述を出した。
+
+  # 日本語の記述生成で最良 (2026-09-22 実測)
+  - key: local-ja-best
+    vendor: huggingface
+    id: RedHatAI/gemma-3-12b-it-FP8-dynamic
+    # RedHatAI は許可 org なので pin は必須ではないが、実測と対応づけるため記録する
+    revision: 15180966d5519f0bbd815362db005dc67bb2332f
+    layer: 床
+    served_as: gemma-12b
+    note: >-
+      Gemma 3 12B の FP8。重み約 13GB / VRAM 29GB で安定。
+      2026-09-22 実測 (同一 40 社・同一プロンプト): **中国語混入 0 / 材料の誤読 0 /
+      材料外の数字 0** で 6.5 秒per社・414 字。4 候補中で最良。
+      比較対象: qwen-coder は 60% 汚染 (每×19/元×5)、
+      ministral-8b は「法人番号指定日」を「設立日」と 48% で誤読した。
+
   # 設計レッドチーム (異ベンダー・思考連鎖)
   - key: redteam
     vendor: deepseek
