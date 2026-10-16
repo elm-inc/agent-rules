@@ -83,7 +83,7 @@ run_drift() {
   #   防ごうとした事故そのもの。一般化すると失敗の向きが
   #   「見逃し (気づけない)」から「誤検知 (すぐ分かる)」に変わる。
   #   誤検知はこの除外リストに足して潰す。
-  local hf_orgs='RedHatAI|Qwen|nvidia|mistralai|google|meta-llama|deepseek-ai|cyankiwi|unsloth|lmstudio-community|mlx-community|zai-org'
+  local hf_orgs='RedHatAI|Qwen|nvidia|mistralai|google|meta-llama|deepseek-ai|cyankiwi|unsloth|lmstudio-community|mlx-community|zai-org|Systran'
   local pattern="claude-(opus|sonnet|haiku|fable|mythos)-[0-9][a-zA-Z0-9.-]*|deepseek-[a-zA-Z][a-zA-Z0-9.-]*|gemini-[0-9][a-zA-Z0-9.-]*|gpt-[0-9][a-zA-Z0-9.-]*|(${hf_orgs})/[A-Za-z0-9._-]+"
 
   # モデル ID ではないが同じ接頭辞を持つ語 (skill 名・HF org 単体の言及)。

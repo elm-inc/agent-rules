@@ -20,7 +20,7 @@
 #
 # 四半期見直し: 次回 2026-11
 
-updated: 2026-09-20
+updated: 2026-10-16
 
 # --- 稼働中のモデル -------------------------------------------------------
 active:
@@ -205,6 +205,22 @@ active:
       API displayName は "Nano Banana Pro"。/nano-banana --pro で選択。
       文字を含む図版や納品物向け。初代 gemini-2.5-flash-image ("Nano Banana") は
       本リポでは未使用
+
+  # 音声の文字起こし (ローカル実行・外部送信なし)
+  - key: transcribe
+    vendor: huggingface
+    id: Systran/faster-whisper-large-v3
+    # commit pin: 重みを「この 1 コミット」に固定し、文字起こし結果の再現性を保つ。
+    # skills/yt-transcribe はこの id と revision を実行時に台帳から読む (直書きしない)
+    revision: edaa852ec7e145841d8ffdb056a99866b5f0a478
+    layer: 文字起こし
+    note: >-
+      Whisper large-v3 の CTranslate2 変換版 (faster-whisper 1.2.1)。skills/yt-transcribe が使用。
+      2026-10-16 に本機で実測 (4 分 18 秒の日本語音声・beam 5):
+      GPU int8_float16 = 18 秒・VRAM ピーク 2.6GB (vLLM 常駐の残り 3.2GB に収まる) /
+      CPU int8 16 スレッド = 46 秒。
+      condition_on_previous_text=True (既定) では同じ音声が vLLM 常駐下で OOM した —
+      前文脈を引き継ぐぶん decoder の系列が伸びるため。スクリプトは False に固定している
 
 # --- 退役・移行済み -------------------------------------------------------
 # operational surface (skills/ scripts/ CLAUDE.md) にこれらが現れたら CI が落とす。
