@@ -76,7 +76,7 @@ vLLM を常駐させず、ローカル LLM スキルが呼ばれた時だけ起�
 | スクリプト | 役割 |
 |---|---|
 | `scripts/ensure-vllm.sh` | 冪等な起動保証。稼働中なら即進行、未稼働なら起動して healthy まで待機。各ローカル LLM スキルが推論前に呼ぶ |
-| `scripts/vllm-idle-watch.sh` | アイドル監視。`vllm:prompt_tokens_total` を poll し、一定時間変化が無ければ `docker stop` で GPU 解放。`ensure-vllm.sh` が flock で 1 つだけ常駐させる |
+| `scripts/vllm-idle-watch.sh` | アイドル監視。`vllm:prompt_tokens_total` を poll し、一定時間変化が無ければ `docker stop` で GPU 解放。`ensure-vllm.sh` が flock で 1 つだけ常駐させる。user systemd があれば transient service `vllm-idle-watch` として起動し (`systemctl --user status vllm-idle-watch`)、呼び出し元が systemd の oneshot サービスでも道連れにならない (AGENT-28) |
 
 docker を直接管理するため **sudo 不要** (elmo が docker グループ所属)。コンテナ設定は常駐時と同一。
 
@@ -88,7 +88,7 @@ sudo systemctl disable --now vllm-qwen-coder
 
 # 以降はスキル実行時に自動起動される。手動で叩く場合:
 bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh          # 起動保証
-bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh status   # running / stopped
+bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh status   # running / 別モデル稼働 / stopped と watcher の有無
 bash ~/repos/github.com/elm-inc/agent-rules/scripts/ensure-vllm.sh stop     # 即停止 (GPU 解放)
 ```
 

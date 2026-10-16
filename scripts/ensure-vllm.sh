@@ -14,7 +14,7 @@
 # Usage:
 #   bash ensure-vllm.sh            # 稼働保証 (未稼働なら起動して healthy まで待機)
 #   bash ensure-vllm.sh stop       # 即時停止 (GPU 解放)
-#   bash ensure-vllm.sh status     # running / stopped を表示
+#   bash ensure-vllm.sh status     # running / 別モデル稼働 / stopped と watcher の有無を表示
 #
 # 終了コード (up): 0=稼働中, 1=起動失敗(GPU競合等), 2 は内部用 (呼び出し側には 1 を返す)
 #
@@ -61,10 +61,47 @@ systemd_managed() {
 
 # アイドル監視を 1 つだけ常駐させる (flock -n で多重起動防止、setsid で完全デタッチ)。
 # 9>&- で親の起動ロック (START_LOCK) を子に継承させない。watcher 不在は警告する。
+#
+# 呼び出し元の cgroup から逃がす (AGENT-28):
+#   systemd の oneshot サービス (ai-trading-platform の atp-daily.service 等) から呼ばれると、
+#   watcher はそのサービスの cgroup に入る。サービスが終わると KillMode=control-group で
+#   cgroup ごと SIGTERM され、**setsid では逃げられない** (セッションは変わっても cgroup は同じ)。
+#   コンテナ (docker の cgroup) だけが残り、watcher 不在のまま 2026-10-15 17:58 から
+#   16 時間 GPU 27.5GB を握り続けた。日次運用のたびに再発する。
+#
+#   対策: user systemd の transient service (`vllm-idle-watch`) として起動する。プロセスを
+#   生むのは user manager なので、呼び出し元の cgroup にも fd にも一切つながらない。
+#   `systemd-run --scope` を & で投げる案は**実測で失敗した** — scope へ移る前に本スクリプトが
+#   exit し、その瞬間にサービスの cgroup ごと消される (起動の登録が終わるまで戻らない
+#   service 方式なら、この競合が原理的に無い)。
+#   user systemd が無い環境 (CI・コンテナ内・cron 等) では従来どおり setsid で起動する。
+# watcher 本体 (`bash <path>/vllm-idle-watch.sh`) が動いているか。
+# **行頭から完全一致で見る** — `pgrep -f vllm-idle-watch.sh` だと、ファイル名を含む
+# あらゆるコマンド (エディタ・cat・Claude の Bash) に当たり、「居る」と誤認して起動を
+# 飛ばす (実測で起きた)。誤認の向きが「watcher 不在で GPU を握り続ける」なので緩めない。
+watcher_alive() { pgrep -f '^bash [^ ]*vllm-idle-watch\.sh$' >/dev/null 2>&1; }
+
 start_watcher() {
   if [ ! -x "$WATCH" ]; then
     log "WARN: watcher 不在 ($WATCH)。アイドル自動停止が効きません"
     return 0
+  fi
+  # 既に居れば起動しない (多重起動の本当の防止は flock。ここは毎回の無駄な起動を省くだけ)
+  watcher_alive && return 0
+  if command -v systemd-run >/dev/null 2>&1; then
+    # transient service は呼び出し元の環境を引き継がないので、watcher が読む変数を渡す
+    local -a envs=(-E "PATH=$PATH")
+    local v
+    for v in VLLM_PORT VLLM_IDLE_MINUTES VLLM_IDLE_POLL; do
+      [ -n "${!v:-}" ] && envs+=(-E "$v=${!v}")
+    done
+    # shellcheck disable=SC2016  # $0-$2 は bash -c の中で展開する
+    if systemd-run --user --quiet --collect --unit=vllm-idle-watch "${envs[@]}" \
+         bash -c 'exec flock -n "$0" bash "$1" >>"$2" 2>&1' "$WATCH_LOCK" "$WATCH" "$WATCH_LOG" \
+         </dev/null >/dev/null 2>&1; then
+      return 0
+    fi
+    # user systemd に繋がらない等 → setsid に落とす (flock が多重起動を防ぐ)
   fi
   if command -v setsid >/dev/null 2>&1; then
     setsid flock -n "$WATCH_LOCK" bash "$WATCH" </dev/null >>"$WATCH_LOG" 2>&1 9>&- &
@@ -72,6 +109,13 @@ start_watcher() {
     nohup flock -n "$WATCH_LOCK" bash "$WATCH" </dev/null >>"$WATCH_LOG" 2>&1 9>&- &
   fi
   disown 2>/dev/null || true
+}
+
+# :8000 で応答しているモデルの served name (止まっていれば空)。
+# healthy() は主力の名前しか見ないので、別モデル (ai-trading-platform の gemma 等) が
+# 動いていると status が "stopped" と答えていた — GPU を握っているのに気づけない。
+served_now() {
+  curl -sf -m 5 "${BASE_URL}/models" 2>/dev/null | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4
 }
 
 case "${1:-up}" in
@@ -85,9 +129,20 @@ case "${1:-up}" in
     exit 0
     ;;
   status)
-    if systemd_managed; then echo "running (systemd 常駐, ${BASE_URL})"
-    elif healthy; then echo "running (${BASE_URL})"
-    else echo "stopped"; fi
+    if systemd_managed; then echo "running (systemd 常駐, ${BASE_URL})"; exit 0; fi
+    other="$(served_now)"
+    if [ -z "$other" ]; then echo "stopped"; exit 0; fi
+    if [ "$other" = "$SERVED_NAME" ]; then
+      echo "running (${BASE_URL})"
+    else
+      echo "running: 別モデル ${other} (主力 ${SERVED_NAME} ではない, ${BASE_URL})"
+    fi
+    # watcher が居なければアイドル自動停止が効かず、GPU を握り続ける (AGENT-28)
+    if watcher_alive; then
+      echo "watcher: 稼働中 (アイドルで自動停止。経過は ${WATCH_LOG})"
+    else
+      echo "watcher: 不在 — 自動停止しません。使っていなければ 'ensure-vllm.sh stop' で GPU を解放してください"
+    fi
     exit 0
     ;;
 esac
